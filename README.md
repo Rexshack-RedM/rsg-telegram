@@ -1,15 +1,11 @@
 # RexshackGaming
 - discord : https://discord.gg/s5uSk56B65
-- youtube : https://www.youtube.com/channel/UCikEgGfXO-HCPxV5rYHEVbA
 - github : https://github.com/Rexshack-RedM
 
-# Framework QRCore RedM Edition
-- https://github.com/QRCore-RedM-Re
-
 # Dependencies
-- qr-core
-- qr-menu
-- qr-input
+- rsg-core
+- rsg-menu
+- rsg-input
 
 # Installation
 - ensure the above dependancies are installed and started

@@ -1,6 +1,6 @@
-local QRCore = exports['qr-core']:GetCoreObject()
+local RSGCore = exports['rsg-core']:GetCoreObject()
 
-QRCore.Functions.CreateCallback('rsg-telegram:server:getplayers', function(source, cb)
+RSGCore.Functions.CreateCallback('rsg-telegram:server:getplayers', function(source, cb)
     exports.oxmysql:execute('SELECT * FROM players', {}, function(result)
         if result[1] then
             cb(result)
@@ -16,14 +16,14 @@ AddEventHandler('rsg-telegram:server:sendmessage', function(sender, sendername, 
 	local src = source
 	local sentDate = os.date("%x")
 	exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `sender`, `sendername`, `subject`, `sentDate`, `message`) VALUES (?, ?, ?, ?, ?, ?);',{citizenid, sender, sendername, subject, sentDate, message})
-	TriggerClientEvent('QRCore:Notify', src, "telegram sent to : "..citizenid, 'primary')  
+	TriggerClientEvent('RSGCore:Notify', src, "telegram sent to : "..citizenid, 'primary')  
 end)
 
 -- check inbox
 RegisterServerEvent('rsg-telegram:server:checkinbox')
 AddEventHandler('rsg-telegram:server:checkinbox', function()
     local src = source
-    local Player = QRCore.Functions.GetPlayer(src)
+    local Player = RSGCore.Functions.GetPlayer(src)
 	local citizenid = Player.PlayerData.citizenid
 	local telenumber = Player.PlayerData.charinfo.telegram
 	exports.oxmysql:execute('SELECT * FROM telegrams WHERE citizenid = ? ORDER BY id DESC', { citizenid }, function(result)
@@ -37,7 +37,7 @@ end)
 RegisterServerEvent('rsg-telegram:server:getTelegrams')
 AddEventHandler('rsg-telegram:server:getTelegrams', function(tid)
     local src = source
-    local Player = QRCore.Functions.GetPlayer(src)
+    local Player = RSGCore.Functions.GetPlayer(src)
     local telegram = {}
     local result = MySQL.query.await('SELECT * FROM telegrams WHERE id = @id', { ['@id'] = tid })
 	if result[1] ~= nil then
@@ -59,9 +59,9 @@ AddEventHandler('rsg-telegram:server:DeleteTelegram', function(tid)
     local result = MySQL.query.await("SELECT * FROM telegrams WHERE id = @id", { ['@id'] = tid })
 	if result[1] ~= nil then
 		MySQL.Async.execute("DELETE FROM telegrams WHERE id = @id", { ["@id"] = tid })
-		TriggerClientEvent('QRCore:Notify', src, "telegram deleted!", 'primary')
+		TriggerClientEvent('RSGCore:Notify', src, "telegram deleted!", 'primary')
 		TriggerClientEvent('rsg-telegram:client:readmessages', src)
 	else
-		TriggerClientEvent('QRCore:Notify', src, "failed to delete your message!", 'error')  
+		TriggerClientEvent('RSGCore:Notify', src, "failed to delete your message!", 'error')  
 	end
 end)

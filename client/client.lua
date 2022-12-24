@@ -1,10 +1,10 @@
-local QRCore = exports['qr-core']:GetCoreObject()
+local RSGCore = exports['rsg-core']:GetCoreObject()
 local telegram
 
 -- prompts
 Citizen.CreateThread(function()
     for telegram, v in pairs(Config.PostOfficeLocations) do
-        exports['qr-core']:createPrompt(v.location, v.coords, QRCore.Shared.Keybinds['J'], 'Open ' .. v.name, {
+        exports['rsg-core']:createPrompt(v.location, v.coords, RSGCore.Shared.Keybinds['J'], 'Open ' .. v.name, {
             type = 'client',
             event = 'rsg-telegram:client:menu',
             args = {},
@@ -20,7 +20,7 @@ end)
 
 -- telegram menu
 RegisterNetEvent('rsg-telegram:client:menu', function(data)
-    exports['qr-menu']:openMenu({
+    exports['rsg-menu']:openMenu({
         {
             header = "| Telegram Menu |",
             isMenuHeader = true,
@@ -47,7 +47,7 @@ RegisterNetEvent('rsg-telegram:client:menu', function(data)
             header = "Close Menu",
             txt = '',
             params = {
-                event = 'qr-menu:closeMenu',
+                event = 'rsg-menu:closeMenu',
             }
         },
     })
@@ -56,7 +56,7 @@ end)
 -- write message
 RegisterNetEvent('rsg-telegram:client:writemessage', function()
 
-	QRCore.Functions.TriggerCallback('rsg-telegram:server:getplayers', function(players)
+	RSGCore.Functions.TriggerCallback('rsg-telegram:server:getplayers', function(players)
 		local option = {}
 		
 		for k,v in pairs(players) do
@@ -69,8 +69,8 @@ RegisterNetEvent('rsg-telegram:client:writemessage', function()
 			})
 		end
 		
-		local input = exports['qr-input']:ShowInput({
-		header = "Telegram : "..QRCore.Functions.GetPlayerData().citizenid,
+		local input = exports['rsg-input']:ShowInput({
+		header = "Telegram : "..RSGCore.Functions.GetPlayerData().citizenid,
 		submitText = "send",
 			inputs = {
 				{
@@ -94,9 +94,9 @@ RegisterNetEvent('rsg-telegram:client:writemessage', function()
 			}
 		})
 		if input ~= nil then
-			local senderfirstname = QRCore.Functions.GetPlayerData().charinfo.firstname
-			local senderlastname = QRCore.Functions.GetPlayerData().charinfo.lastname
-			local sendertelegram = QRCore.Functions.GetPlayerData().citizenid
+			local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
+			local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
+			local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
 			local senderfullname = senderfirstname..' '..senderlastname
 			TriggerServerEvent('rsg-telegram:server:sendmessage', sendertelegram, senderfullname, input.recipient, input.subject, input.message)
 		end

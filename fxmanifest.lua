@@ -28,9 +28,9 @@ files {
 }
 
 dependencies {
-    'qr-core',
-	'qr-input',
-	'qr-menu'
+    'rsg-core',
+	'rsg-input',
+	'rsg-menu'
 }
 
 lua54 'yes'
