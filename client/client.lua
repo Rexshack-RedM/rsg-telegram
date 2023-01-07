@@ -13,7 +13,7 @@ Citizen.CreateThread(function()
             local PostOfficeBlip = Citizen.InvokeNative(0x554D9D53F696D002, 1664425300, v.coords)
             SetBlipSprite(PostOfficeBlip, GetHashKey(Config.Blip.blipSprite), true)
             SetBlipScale(PostOfficeBlip, Config.Blip.blipScale)
-			Citizen.InvokeNative(0x9CB1A1623062F402, PostOfficeBlip, Config.Blip.blipName)
+            Citizen.InvokeNative(0x9CB1A1623062F402, PostOfficeBlip, Config.Blip.blipName)
         end
     end
 end)
@@ -30,8 +30,8 @@ RegisterNetEvent('rsg-telegram:client:menu', function(data)
             txt = "read your telegram messages",
             params = {
                 event = 'rsg-telegram:client:readmessages',
-				isServer = false,
-				args = {}
+                isServer = false,
+                args = {}
             }
         },
         {
@@ -39,8 +39,8 @@ RegisterNetEvent('rsg-telegram:client:menu', function(data)
             txt = "send a telegram to another player",
             params = {
                 event = 'rsg-telegram:client:writemessage',
-				isServer = false,
-				args = {}
+                isServer = false,
+                args = {}
             }
         },
         {
@@ -56,51 +56,51 @@ end)
 -- write message
 RegisterNetEvent('rsg-telegram:client:writemessage', function()
 
-	RSGCore.Functions.TriggerCallback('rsg-telegram:server:getplayers', function(players)
-		local option = {}
-		
-		for k,v in pairs(players) do
-			local citizenid = v.citizenid
-			local firstname = json.decode(v.charinfo).firstname
-			local lastname = json.decode(v.charinfo).lastname
-			local fullname = firstname..' '..lastname
-			table.insert(option, {
-				value = citizenid, text = citizenid..' : '..firstname..' '..lastname
-			})
-		end
-		
-		local input = exports['rsg-input']:ShowInput({
-		header = "Telegram : "..RSGCore.Functions.GetPlayerData().citizenid,
-		submitText = "send",
-			inputs = {
-				{
-					text = "Recipient",
-					name = "recipient",
-					type = "select",
-					options = option
-				},
-				{
-					type = 'text',
-					name = 'subject',
-					text = 'subject',
-					isRequired = true,
-				},
-				{
-					type = 'text',
-					name = 'message',
-					text = 'add your message here',
-					isRequired = true,
-				},
-			}
-		})
-		if input ~= nil then
-			local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
-			local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
-			local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
-			local senderfullname = senderfirstname..' '..senderlastname
-			TriggerServerEvent('rsg-telegram:server:sendmessage', sendertelegram, senderfullname, input.recipient, input.subject, input.message)
-		end
-	end)
+    RSGCore.Functions.TriggerCallback('rsg-telegram:server:getplayers', function(players)
+        local option = {}
+        
+        for k,v in pairs(players) do
+            local citizenid = v.citizenid
+            local firstname = json.decode(v.charinfo).firstname
+            local lastname = json.decode(v.charinfo).lastname
+            local fullname = firstname..' '..lastname
+            table.insert(option, {
+                value = citizenid, text = citizenid..' : '..firstname..' '..lastname
+            })
+        end
+        
+        local input = exports['rsg-input']:ShowInput({
+        header = "Telegram : "..RSGCore.Functions.GetPlayerData().citizenid,
+        submitText = "send for $"..tonumber(Config.CostPerTelegram),
+            inputs = {
+                {
+                    text = "Recipient",
+                    name = "recipient",
+                    type = "select",
+                    options = option
+                },
+                {
+                    type = 'text',
+                    name = 'subject',
+                    text = 'subject',
+                    isRequired = true,
+                },
+                {
+                    type = 'text',
+                    name = 'message',
+                    text = 'add your message here',
+                    isRequired = true,
+                },
+            }
+        })
+        if input ~= nil then
+            local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
+            local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
+            local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
+            local senderfullname = senderfirstname..' '..senderlastname
+            TriggerServerEvent('rsg-telegram:server:sendmessage', sendertelegram, senderfullname, input.recipient, input.subject, input.message)
+        end
+    end)
 end)
 
 -- read messages

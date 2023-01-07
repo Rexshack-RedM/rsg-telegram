@@ -13,7 +13,7 @@ client_scripts {
 
 server_scripts {
     'server/server.lua',
-	'@oxmysql/lib/MySQL.lua',
+    '@oxmysql/lib/MySQL.lua',
 }
 
 shared_scripts {
@@ -21,7 +21,7 @@ shared_scripts {
 }
 
 files {
-	'client/html/ui.html', 
+    'client/html/ui.html', 
     'client/html/style.css',
     'client/html/script.js',
     'client/html/bg.png'
@@ -29,8 +29,8 @@ files {
 
 dependencies {
     'rsg-core',
-	'rsg-input',
-	'rsg-menu'
+    'rsg-input',
+    'rsg-menu'
 }
 
 lua54 'yes'
