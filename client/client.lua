@@ -4,7 +4,7 @@ local telegram
 -- prompts
 Citizen.CreateThread(function()
     for telegram, v in pairs(Config.PostOfficeLocations) do
-        exports['rsg-core']:createPrompt(v.location, v.coords, RSGCore.Shared.Keybinds['J'], 'Open ' .. v.name, {
+        exports['rsg-core']:createPrompt(v.location, v.coords, RSGCore.Shared.Keybinds['J'],  Lang:t('menu.open') .. v.name, {
             type = 'client',
             event = 'rsg-telegram:client:menu',
             args = {},
@@ -22,12 +22,12 @@ end)
 RegisterNetEvent('rsg-telegram:client:menu', function(data)
     exports['rsg-menu']:openMenu({
         {
-            header = "| Telegram Menu |",
+            header =  Lang:t('menu.telegram_menu'),
             isMenuHeader = true,
         },
         {
-            header = "📥 | Read Messages",
-            txt = "read your telegram messages",
+            header =  Lang:t('menu.read_messages'),
+            txt = Lang:t('text.read_your_telegram_messages'),
             params = {
                 event = 'rsg-telegram:client:readmessages',
                 isServer = false,
@@ -35,8 +35,8 @@ RegisterNetEvent('rsg-telegram:client:menu', function(data)
             }
         },
         {
-            header = "📤 | Send Telegram",
-            txt = "send a telegram to another player",
+            header =  Lang:t('menu.send_telegram'),
+            txt =  Lang:t('text.send_telegram_to_another_player'),
             params = {
                 event = 'rsg-telegram:client:writemessage',
                 isServer = false,
@@ -44,7 +44,7 @@ RegisterNetEvent('rsg-telegram:client:menu', function(data)
             }
         },
         {
-            header = "Close Menu",
+            header = Lang:t('menu.close_menu'),
             txt = '',
             params = {
                 event = 'rsg-menu:closeMenu',
@@ -70,11 +70,11 @@ RegisterNetEvent('rsg-telegram:client:writemessage', function()
         end
         
         local input = exports['rsg-input']:ShowInput({
-        header = "Telegram : "..RSGCore.Functions.GetPlayerData().citizenid,
-        submitText = "send for $"..tonumber(Config.CostPerTelegram),
+        header = Lang:t('inputs.telegram')..RSGCore.Functions.GetPlayerData().citizenid,
+        submitText = Lang:t('inputs.send_for')..tonumber(Config.CostPerTelegram),
             inputs = {
                 {
-                    text = "Recipient",
+                    text = Lang:t('inputs.recipient'),
                     name = "recipient",
                     type = "select",
                     options = option
@@ -82,13 +82,13 @@ RegisterNetEvent('rsg-telegram:client:writemessage', function()
                 {
                     type = 'text',
                     name = 'subject',
-                    text = 'subject',
+                    text = Lang:t('inputs.subject'),
                     isRequired = true,
                 },
                 {
                     type = 'text',
                     name = 'message',
-                    text = 'add your message here',
+                    text = Lang:t('inputs.add_your_message_here'),
                     isRequired = true,
                 },
             }
@@ -107,8 +107,9 @@ end)
 RegisterNetEvent('rsg-telegram:client:readmessages')
 AddEventHandler('rsg-telegram:client:readmessages', function(location)
     InMenu = true
+    translations = translates()
     SetNuiFocus(true, true)
-    SendNUIMessage({ type = 'openGeneral' })
+    SendNUIMessage({ type = 'openGeneral', translations = translations })
     TriggerServerEvent('rsg-telegram:server:checkinbox')
 end)
 
@@ -125,7 +126,9 @@ end)
 -- telegram message
 RegisterNetEvent('rsg-telegram:client:messageData')
 AddEventHandler('rsg-telegram:client:messageData', function(tele)
-    SendNUIMessage({ type = 'view', telegram = tele })
+    translations = translates()
+
+    SendNUIMessage({ type = 'view', telegram = tele, translations = translations })
 end)
 
 -- delete message
@@ -139,3 +142,13 @@ RegisterNUICallback('NUIFocusOff', function()
     SetNuiFocus(false, false)
     SendNUIMessage({ type = 'closeAll' })
 end)
+
+function translates() 
+    local translations = {}
+    for k in pairs(Lang.fallback and Lang.fallback.phrases or Lang.phrases) do
+       if k:sub(0, ('showUi.'):len()) then
+           translations[k:sub(('showUi.'):len() + 1)] = Lang:t(k)
+       end
+   end
+   return translations
+end

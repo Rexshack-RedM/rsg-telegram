@@ -20,10 +20,10 @@ AddEventHandler('rsg-telegram:server:sendmessage', function(sender, sendername, 
     if cashBalance >= cost then
         local sentDate = os.date("%x")
         exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `sender`, `sendername`, `subject`, `sentDate`, `message`) VALUES (?, ?, ?, ?, ?, ?);',{citizenid, sender, sendername, subject, sentDate, message})
-        TriggerClientEvent('RSGCore:Notify', src, "telegram sent to : "..citizenid, 'primary')
+        TriggerClientEvent('RSGCore:Notify', src, Lang:t('primary.telegram_sent_to')..citizenid, 'primary')
         Player.Functions.RemoveMoney('cash', cost, 'send teletram')
     else 
-        RSGCore.Functions.Notify(src, 'you don\'t have enough cash on you!', 'error')
+        RSGCore.Functions.Notify(src,  Lang:t('error.you_dont_have_enough_cash_on_you'), 'error')
     end
 end)
 
@@ -70,6 +70,6 @@ AddEventHandler('rsg-telegram:server:DeleteTelegram', function(tid)
         TriggerClientEvent('RSGCore:Notify', src, "telegram deleted!", 'primary')
         TriggerClientEvent('rsg-telegram:client:readmessages', src)
     else
-        TriggerClientEvent('RSGCore:Notify', src, "failed to delete your message!", 'error')  
+        TriggerClientEvent('RSGCore:Notify', src, Lang:t('error.failed_to_delete_your_message'), 'error')
     end
 end)
