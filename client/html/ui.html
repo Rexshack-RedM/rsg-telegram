@@ -11,38 +11,38 @@
 <body>
     <div class="inbox">
         <div class="header">
-           <div><h1 class="postoffice">Post Office</h1></div>
+           <div><h1 class="postoffice"><span id="postoffice"> </span></h1></div>
         </div>
         <div class="inboxContainer">
             <ul id="inboxList"></ul>
         </div>
-        <button class="btn closePostoffice">Close Post Office</button>
+        <button class="btn closePostoffice"><b> <span id="view_text_close_post_office"> </span> </b></button>
     </div>
     <div class="view">
         <a href="#" class="close_view">X</a>
         <div class="telegram_header">
             <div class="telegram_info">
                 <div>
-                    <b>Sender:</b> <span id="view_sendername"></span>
+                    <b> <span id="view_text_sender"></span> </b> <span id="view_sendername"></span>
                 </div>
                 <div>
-                    <b>Recipient:</b> <span id="view_recipient"></span>
+                    <b> <span id="view_text_recipient"> </span> </b> <span id="view_recipient"></span>
                 </div>
                 <div>
-                    <b>Date:</b> <span id="view_date"></span>
+                    <b> <span id="view_text_date"> </span> </b> <span id="view_date"></span>
                 </div>
             </div>
         </div>
 		<div class="telegram_subject">
-			<b>Subject:</b> <span id="view_subject"></span>
+            <b> <span id="view_text_subject"> </span> </b> <span id="view_subject"></span>
 		</div>
 		<br>
 		<div class="telegram_message"> 
-			<b>Message:</b> <span id="view_message"></span>
+			<b> <span id="view_text_message"> </span> </b> <span id="view_message"></span>
 		</div>
 		<br>
         <div class="telegram_footer">
-            <button class="telegram_delete_button">Delete</button>
+            <button class="telegram_delete_button"><span id="view_text_delete"> </span></button>
         </div>
     </div>
     <script src="script.js"></script>

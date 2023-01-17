@@ -1,3 +1,5 @@
+var translations = {}
+
 function loadInbox(list){
     $('#inboxList').empty();
     if(list.length > 0) {
@@ -30,6 +32,15 @@ function loadInbox(list){
 $(function () {
     window.addEventListener('message', function (event) {
         if (event.data.type === "openGeneral") {
+            $("#view_text_sender").text(event.data.translations['sender'])
+            $("#view_text_recipient").text(event.data.translations['recipient'])
+            $("#view_text_date").text(event.data.translations['dateMail'])
+            $("#view_text_subject").text(event.data.translations['subject'])
+            $("#view_text_message").text(event.data.translations['message'])
+            $("#view_text_delete").text(event.data.translations['delete'])
+            $("#view_text_delete_general").text(event.data.translations['delete'])            
+            $("#postoffice").text(event.data.translations['post_office'])
+            $("#view_text_close_post_office").text(event.data.translations['close_post_office'])
             $('.inbox').css('display', 'block');      
             let today = new Date().toLocaleDateString();
             $('#today').text(today);
@@ -41,7 +52,17 @@ $(function () {
 			$("#view_sendername").text(event.data.telegram.sendername)
             $("#view_date").text(event.data.telegram.sentDate)
             $("#view_subject").text(event.data.telegram.subject)
-            $("#view_message").text(event.data.telegram.message)
+            $("#view_message").text(event.data.telegram.message)            
+            $("#view_text_sender").text(event.data.translations['sender'])
+            $("#view_text_recipient").text(event.data.translations['recipient'])
+            $("#view_text_date").text(event.data.translations['dateMail'])
+            $("#view_text_subject").text(event.data.translations['subject'])
+            $("#view_text_message").text(event.data.translations['message'])
+            $("#view_text_delete").text(event.data.translations['delete'])
+            $("#view_text_delete_general").text(event.data.translations['delete'])            
+            $("#postoffice").text(event.data.translations['post_office'])
+            $("#view_text_close_post_office").text(event.data.translations['close_post_office'])
+            
         }
         if(event.data.type === "inboxlist"){
 			var msglist = event.data.response.list
@@ -55,6 +76,10 @@ $(function () {
         }
     });
 });
+
+function translate(phrase) {    
+    return translations[phrase] || phrase;
+}
 
 $(document).ready(function(){
     $("#inboxList").on("click",'li',function(event){

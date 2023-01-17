@@ -7,6 +7,13 @@ description 'rsg-telegram'
 
 ui_page('client/html/ui.html')
 
+shared_scripts {
+    '@rsg-core/shared/locale.lua',
+    'locales/en.lua',
+    'locales/*.lua',
+    'config.lua',
+}
+
 client_scripts {
     'client/client.lua'
 }
@@ -14,10 +21,6 @@ client_scripts {
 server_scripts {
     'server/server.lua',
     '@oxmysql/lib/MySQL.lua',
-}
-
-shared_scripts {
-    'config.lua'
 }
 
 files {
