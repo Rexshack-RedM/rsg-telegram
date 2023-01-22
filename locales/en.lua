@@ -7,14 +7,14 @@ local Translations = {
 		    var = 'text goes here',
     },
     primary = {
-        telegram_sent_to = 'telegram sent to : ',
+        telegram_sent_to = 'Telegram sent to : ',
         post_office = 'Post Office',
     },
     menu = {
 		    open = 'Open ',
             telegram_menu = '| Telegram Menu |',
-            read_messages = '📥 | Read Messages',
-            send_telegram = '📤 | Send Telegram',
+            read_messages = '📥 | Read Telegrams',
+            send_telegram = '📤 | Send Telegrams',
             close_menu = 'Close Menu',
     },
     commands = {
@@ -22,17 +22,17 @@ local Translations = {
     },
     inputs = {
             recipient = 'Recipient',
-            subject = 'subject',
+            subject = 'Subject',
             add_your_message_here = 'add your message here',
             telegram =  'Telegram : ',
-            send_for = 'send for $',
+            send_for = 'Send for $',
     },
     progressbar = {
 		    var = 'text goes here',
     },
     text = {
-        read_your_telegram_messages = 'read your telegram messages',
-        send_telegram_to_another_player = 'send a telegram to another player',
+        read_your_telegram_messages = '',
+        send_telegram_to_another_player = '',
     },
     showUi = {
         sender = 'Sender:',
