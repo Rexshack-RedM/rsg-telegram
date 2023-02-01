@@ -2,38 +2,33 @@ fx_version 'cerulean'
 rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aware my resources *will* become incompatible once RedM ships.'
 game 'rdr3'
 
-author 'RexShack#3041'
-description 'rsg-telegram'
+author 'MOVZX'
+description 'Use the Bird Post to send letters to anyone! This mod requires rsg-core, bm-input, and bm-menu.'
 
-ui_page('client/html/ui.html')
+ui_page('html/ui.html')
+
+server_scripts {
+    '@oxmysql/lib/MySQL.lua',
+    'server/server.lua'
+}
 
 shared_scripts {
+    'config.lua',
+    'shared/functions.lua',
     '@rsg-core/shared/locale.lua',
     'locales/en.lua',
-    'locales/*.lua',
-    'config.lua',
+    'locales/*.lua'
 }
 
 client_scripts {
     'client/client.lua'
 }
 
-server_scripts {
-    'server/server.lua',
-    '@oxmysql/lib/MySQL.lua',
-}
-
 files {
-    'client/html/ui.html', 
-    'client/html/style.css',
-    'client/html/script.js',
-    'client/html/bg.png'
-}
-
-dependencies {
-    'rsg-core',
-    'rsg-input',
-    'rsg-menu'
+    'html/ui.html',
+    'html/style.css',
+    'html/script.js',
+    'html/bg.png'
 }
 
 lua54 'yes'
