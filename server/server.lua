@@ -184,7 +184,7 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayers', function(sour
 end)
 
 RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayersPostOffice', function(source, cb)
-    exports.oxmysql:execute('SELECT * FROM players', {}, function(result)
+    exports.oxmysql:execute('SELECT * FROM `players` ORDER BY JSON_VALUE(charinfo,\'$.firstname\') ASC', {}, function(result)
         if result[1] then
             cb(result)
         else
