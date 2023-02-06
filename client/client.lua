@@ -105,7 +105,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
             local firstname = json.decode(players[i].charinfo).firstname
             local lastname = json.decode(players[i].charinfo).lastname
             local fullname = firstname..' '..lastname
-            local content = {value = citizenid, text = '('..citizenid..') '..fullname}
+            local content = {value = citizenid, text = fullname..' ('..citizenid..')'}
             
             option[#option + 1] = content
         end
