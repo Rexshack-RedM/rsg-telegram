@@ -106,6 +106,10 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
             local lastname = json.decode(players[i].charinfo).lastname
             local fullname = firstname..' '..lastname
             local content = {value = citizenid, text = '('..citizenid..') '..fullname}
+            
+            table.sort(option, function (a, b)
+                return a.firstname < b.firstname
+            end)
 
             option[#option + 1] = content
         end
