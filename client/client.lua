@@ -191,6 +191,73 @@ local function Prompts()
     DeleteEntity(cuteBird)
 end
 
+-- Set Bird Attribute
+local SetPetAttributes = function(entity)
+    -- SET_ATTRIBUTE_POINTS
+    Citizen.InvokeNative(0x09A59688C26D88DF, entity, 0, 1100)
+    Citizen.InvokeNative(0x09A59688C26D88DF, entity, 1, 1100)
+    Citizen.InvokeNative(0x09A59688C26D88DF, entity, 2, 1100)
+
+    -- ADD_ATTRIBUTE_POINTS
+    Citizen.InvokeNative(0x75415EE0CB583760, entity, 0, 1100)
+    Citizen.InvokeNative(0x75415EE0CB583760, entity, 1, 1100)
+    Citizen.InvokeNative(0x75415EE0CB583760, entity, 2, 1100)
+
+    -- SET_ATTRIBUTE_BASE_RANK
+    Citizen.InvokeNative(0x5DA12E025D47D4E5, entity, 0, 10)
+    Citizen.InvokeNative(0x5DA12E025D47D4E5, entity, 1, 10)
+    Citizen.InvokeNative(0x5DA12E025D47D4E5, entity, 2, 10)
+
+    -- SET_ATTRIBUTE_BONUS_RANK
+    Citizen.InvokeNative(0x920F9488BD115EFB, entity, 0, 10)
+    Citizen.InvokeNative(0x920F9488BD115EFB, entity, 1, 10)
+    Citizen.InvokeNative(0x920F9488BD115EFB, entity, 2, 10)
+
+    -- SET_ATTRIBUTE_OVERPOWER_AMOUNT
+    Citizen.InvokeNative(0xF6A7C08DF2E28B28, entity, 0, 5000.0, false)
+    Citizen.InvokeNative(0xF6A7C08DF2E28B28, entity, 1, 5000.0, false)
+    Citizen.InvokeNative(0xF6A7C08DF2E28B28, entity, 2, 5000.0, false)
+end
+
+local function SetPetBehavior(entity)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), GetHashKey('PLAYER'))
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 143493179)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -2040077242)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 1222652248)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 1077299173)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -887307738)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1998572072)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -661858713)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 1232372459)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1836932466)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 1878159675)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 1078461828)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1535431934)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 1862763509)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1663301869)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1448293989)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1201903818)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -886193798)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1996978098)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 555364152)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -2020052692)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 707888648)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 378397108)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -350651841)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1538724068)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 1030835986)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1919885972)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1976316465)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 841021282)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 889541022)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1329647920)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -319516747)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -767591988)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -989642646)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), 1986610512)
+    SetRelationshipBetweenGroups(1, GetPedRelationshipGroupHash(entity), -1683752762)
+end
+
 -- Place Ped on Ground Properly
 local PlacePedOnGroundProperly = function(hPed, howfar)
     local playerPed = PlayerPedId()
@@ -206,6 +273,8 @@ end
 -- Spawn the Bird Post
 local SpawnBirdPost = function(posX, posY, posZ, heading, rfar, x)
     cuteBird = CreatePed(Config.BirdModel, posX, posY, posZ, heading, 1, 1)
+
+    SetPetAttributes(cuteBird)
 
     Citizen.InvokeNative(0x013A7BA5015C1372, cuteBird, true) -- SetPedIgnoreDeadBodies
     Citizen.InvokeNative(0xAEB97D84CDF3C00B, cuteBird, false) -- SetAnimalIsWild
@@ -268,14 +337,14 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
     sID = SsID
     tPName = StPName
     local ped = PlayerPedId()
-    playerCoords = GetEntityCoords(ped)
     local rFar = math.random(50, 100)
 
     while isReceiving do
         Wait(1)
-        local CurrentCoords = GetEntityCoords(ped)
+
+        playerCoords = GetEntityCoords(ped)
         local birdCoords = GetEntityCoords(cuteBird)
-        local myCoords = vector3(CurrentCoords.x, CurrentCoords.y, CurrentCoords.z)
+        local myCoords = vector3(playerCoords.x, playerCoords.y, playerCoords.z)
         destination = #(birdCoords - myCoords)
 
         local insideBuilding = GetInteriorFromEntity(ped)
@@ -329,7 +398,7 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
                 Wait(1000)
             end
 
-            TaskFlyToCoord(cuteBird, 0, CurrentCoords.x - 1, CurrentCoords.y - 1, CurrentCoords.z, 1, 0)
+            TaskFlyToCoord(cuteBird, 0, myCoords.x - 1, myCoords.y - 1, myCoords.z, 1, 0)
         end
 
         if birdTime > 0 then
@@ -396,16 +465,26 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
 
         TaskWhistleAnim(ped, GetHashKey('WHISTLEHORSELONG'))
 
-        SpawnBirdPost(playerCoords.x, playerCoords.y, playerCoords.z + 50, heading, rFar, 1)
+        SpawnBirdPost(playerCoords.x, playerCoords.y - rFar, playerCoords.z, heading, rFar)
 
         if cuteBird == nil then
             RSGCore.Functions.Notify('The bird got away!', 'error')
+            return
         end
 
-        TaskFlyToCoord(cuteBird, 0, playerCoords.x, playerCoords.y, playerCoords.z, 1, 0)
+        TaskFlyToCoord(cuteBird, 1, playerCoords.x, playerCoords.y, playerCoords.z, 1, 1)
+        TaskStartScenarioInPlace(ped, GetHashKey('WORLD_HUMAN_WRITE_NOTEBOOK'), -1, true, false, false, false)
 
-        TaskStartScenarioInPlace(PlayerPedId(), GetHashKey('WORLD_HUMAN_WRITE_NOTEBOOK'), -1, true, false, false, false)
-        Wait(5000)
+        while true do
+            local birdPos = GetEntityCoords(cuteBird)
+            local distance = #(birdPos - playerCoords)
+
+            if distance > 1 then
+                Wait(1000)
+            else
+                break
+            end
+        end
 
         local sendButton = Lang:t("desc.send_button_free")
 
