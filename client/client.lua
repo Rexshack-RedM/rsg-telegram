@@ -100,53 +100,58 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
     RSGCore.Functions.TriggerCallback('rsg-telegram:server:GetPlayersPostOffice', function(players)
         local option = {}
 
-        for i = 1, #players do
-            local citizenid = players[i].citizenid
-            local fullname = players[i].name
-            local content = {value = citizenid, text = fullname..' ('..citizenid..')'}
-            
-            option[#option + 1] = content
-        end
+        if players~=nil then
+            for i = 1, #players do
+                local citizenid = players[i].citizenid
+                local fullname = players[i].name
+                local content = {value = citizenid, text = fullname..' ('..citizenid..')'}
+                
+                option[#option + 1] = content
+            end
+    
+            local sendButton = Lang:t("desc.send_button_free")
+    
+            if Config.ChargePlayer then
+                sendButton = Lang:t("desc.send_button_paid", {lPrice = tonumber(Config.CostPerLetter)})
+            end
+    
+            local input = exports['rsg-input']:ShowInput({
+            header = Lang:t('desc.send_message_header'),
+            submitText = sendButton,
+                inputs = {
+                    {
+                        text = "Recipient",
+                        name = "recipient",
+                        type = "select",
+                        options = option
+                    },
+                    {
+                        type = 'text',
+                        name = 'subject',
+                        text = 'subject',
+                        isRequired = true,
+                    },
+                    {
+                        type = 'text',
+                        name = 'message',
+                        text = 'add your message here',
+                        isRequired = true,
+                    },
+                }
+            })
+    
+            if input ~= nil then
+                local pID =  PlayerId()
+                senderID = GetPlayerServerId(pID)
+                local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
+                local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
+                local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
+                local senderfullname = senderfirstname..' '..senderlastname
+                TriggerServerEvent('rsg-telegram:server:SendMessagePostOffice', sendertelegram, senderfullname, input.recipient, input.subject, input.message)
+            end
+        else
+            RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
 
-        local sendButton = Lang:t("desc.send_button_free")
-
-        if Config.ChargePlayer then
-            sendButton = Lang:t("desc.send_button_paid", {lPrice = tonumber(Config.CostPerLetter)})
-        end
-
-        local input = exports['rsg-input']:ShowInput({
-        header = Lang:t('desc.send_message_header'),
-        submitText = sendButton,
-            inputs = {
-                {
-                    text = "Recipient",
-                    name = "recipient",
-                    type = "select",
-                    options = option
-                },
-                {
-                    type = 'text',
-                    name = 'subject',
-                    text = 'subject',
-                    isRequired = true,
-                },
-                {
-                    type = 'text',
-                    name = 'message',
-                    text = 'add your message here',
-                    isRequired = true,
-                },
-            }
-        })
-
-        if input ~= nil then
-            local pID =  PlayerId()
-            senderID = GetPlayerServerId(pID)
-            local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
-            local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
-            local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
-            local senderfullname = senderfirstname..' '..senderlastname
-            TriggerServerEvent('rsg-telegram:server:SendMessagePostOffice', sendertelegram, senderfullname, input.recipient, input.subject, input.message)
         end
     end)
 end)
@@ -430,168 +435,172 @@ end)
 -- Write the Message
 RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
     RSGCore.Functions.TriggerCallback('rsg-telegram:server:GetPlayers', function(players)
-        local citizenid = 0
-        local name = 0
-        local sourceplayer = 0
-        local option = {}
+        if players ~= nil then
+            local citizenid = 0
+            local name = 0
+            local sourceplayer = 0
+            local option = {}
 
-        if isReceiving then
-            RSGCore.Functions.Notify(Lang:t("error.send_receiving"), 'error', 8000)
-            return
-        end
-
-        local ped = PlayerPedId()
-        local pID =  PlayerId()
-        senderID = GetPlayerServerId(pID)
-
-        if IsPedOnMount(ped) or IsPedOnVehicle(ped) then
-            RSGCore.Functions.Notify(Lang:t("error.player_on_horse"), 'error')
-            return
-        end
-
-        ClearPedTasks(ped)
-        ClearPedSecondaryTask(ped)
-        FreezeEntityPosition(ped, true)
-        SetEntityInvincible(ped, true)
-
-        playerCoords = GetEntityCoords(ped)
-        targetCoords = GetEntityCoords(targetPed)
-        local coordsOffset = math.random(200, 300)
-
-        local heading = GetEntityHeading(ped)
-        local rFar = 30
-
-        TaskWhistleAnim(ped, GetHashKey('WHISTLEHORSELONG'))
-
-        SpawnBirdPost(playerCoords.x, playerCoords.y - rFar, playerCoords.z, heading, rFar)
-
-        if cuteBird == nil then
-            RSGCore.Functions.Notify('The bird got away!', 'error')
-            return
-        end
-
-        TaskFlyToCoord(cuteBird, 1, playerCoords.x, playerCoords.y, playerCoords.z, 1, 1)
-        TaskStartScenarioInPlace(ped, GetHashKey('WORLD_HUMAN_WRITE_NOTEBOOK'), -1, true, false, false, false)
-
-        while true do
-            local birdPos = GetEntityCoords(cuteBird)
-            local distance = #(birdPos - playerCoords)
-
-            if distance > 1 then
-                Wait(1000)
-            else
-                break
+            if isReceiving then
+                RSGCore.Functions.Notify(Lang:t("error.send_receiving"), 'error', 8000)
+                return
             end
-        end
 
-        local sendButton = Lang:t("desc.send_button_free")
+            local ped = PlayerPedId()
+            local pID =  PlayerId()
+            senderID = GetPlayerServerId(pID)
 
-        if Config.ChargePlayer then
-            sendButton = Lang:t("desc.send_button_paid", {lPrice = tonumber(Config.CostPerLetter)})
-        end
+            if IsPedOnMount(ped) or IsPedOnVehicle(ped) then
+                RSGCore.Functions.Notify(Lang:t("error.player_on_horse"), 'error')
+                return
+            end
 
-        for i = 1, #players do
-            local targetPlayer = players[i]
+            ClearPedTasks(ped)
+            ClearPedSecondaryTask(ped)
+            FreezeEntityPosition(ped, true)
+            SetEntityInvincible(ped, true)
 
-            
-            citizenid = targetPlayer.citizenid
-            name = targetPlayer.name
-            local content = {value = citizenid, text = '('..citizenid..') '..name}
+            playerCoords = GetEntityCoords(ped)
+            targetCoords = GetEntityCoords(targetPed)
+            local coordsOffset = math.random(200, 300)
 
-            option[#option + 1] = content
-        end
-        local input = exports['rsg-input']:ShowInput
-        ({
-            header = Lang:t('desc.send_message_header'),
-            submitText = sendButton,
-            inputs =
-            {
-                --[[
+            local heading = GetEntityHeading(ped)
+            local rFar = 30
+
+            TaskWhistleAnim(ped, GetHashKey('WHISTLEHORSELONG'))
+
+            SpawnBirdPost(playerCoords.x, playerCoords.y - rFar, playerCoords.z, heading, rFar)
+
+            if cuteBird == nil then
+                RSGCore.Functions.Notify('The bird got away!', 'error')
+                return
+            end
+
+            TaskFlyToCoord(cuteBird, 1, playerCoords.x, playerCoords.y, playerCoords.z, 1, 1)
+            TaskStartScenarioInPlace(ped, GetHashKey('WORLD_HUMAN_WRITE_NOTEBOOK'), -1, true, false, false, false)
+
+            while true do
+                local birdPos = GetEntityCoords(cuteBird)
+                local distance = #(birdPos - playerCoords)
+
+                if distance > 1 then
+                    Wait(1000)
+                else
+                    break
+                end
+            end
+
+            local sendButton = Lang:t("desc.send_button_free")
+
+            if Config.ChargePlayer then
+                sendButton = Lang:t("desc.send_button_paid", {lPrice = tonumber(Config.CostPerLetter)})
+            end
+
+            for i = 1, #players do
+                local targetPlayer = players[i]
+
+                
+                citizenid = targetPlayer.citizenid
+                name = targetPlayer.name
+                local content = {value = citizenid, text = '('..citizenid..') '..name}
+
+                option[#option + 1] = content
+            end
+            local input = exports['rsg-input']:ShowInput
+            ({
+                header = Lang:t('desc.send_message_header'),
+                submitText = sendButton,
+                inputs =
                 {
-                    type = 'select',
-                    name = 'recipient',
-                    text = Lang:t('desc.recipient'),
-                    isRequired = true
-                },
-                ]]--
-                {
-                    text = Lang:t('desc.recipient'),
-                    name = "recipient",
-                    type = "select",
-                    options = option
-                },
-                {
-                    type = 'text',
-                    name = 'subject',
-                    text = Lang:t('desc.subject'),
-                    isRequired = true
-                },
-                {
-                    type = 'text',
-                    name = 'message',
-                    text = Lang:t('desc.message'),
-                    isRequired = true
+                    --[[
+                    {
+                        type = 'select',
+                        name = 'recipient',
+                        text = Lang:t('desc.recipient'),
+                        isRequired = true
+                    },
+                    ]]--
+                    {
+                        text = Lang:t('desc.recipient'),
+                        name = "recipient",
+                        type = "select",
+                        options = option
+                    },
+                    {
+                        type = 'text',
+                        name = 'subject',
+                        text = Lang:t('desc.subject'),
+                        isRequired = true
+                    },
+                    {
+                        type = 'text',
+                        name = 'message',
+                        text = Lang:t('desc.message'),
+                        isRequired = true
+                    }
                 }
-            }
-        })
+            })
 
-        if input == nil then
-            FreezeEntityPosition(PlayerPedId(), false)
-            SetEntityInvincible(PlayerPedId(), false)
-            ClearPedTasks(PlayerPedId())
-            ClearPedSecondaryTask(PlayerPedId())
+            if input == nil then
+                FreezeEntityPosition(PlayerPedId(), false)
+                SetEntityInvincible(PlayerPedId(), false)
+                ClearPedTasks(PlayerPedId())
+                ClearPedSecondaryTask(PlayerPedId())
+
+                SetEntityInvincible(cuteBird, false)
+                SetEntityCanBeDamaged(cuteBird, true)
+                SetEntityAsMissionEntity(cuteBird, false, false)
+                SetEntityAsNoLongerNeeded(cuteBird)
+                DeleteEntity(cuteBird)
+
+                if birdBlip ~= nil then
+                    RemoveBlip(birdBlip)
+                end
+
+                RSGCore.Functions.Notify(Lang:t('error.cancel_send'), 'error')
+
+                return
+            end
+
+            Debug("input.recipient", input.recipient)
+            Debug("input.subject", input.subject)
+            Debug("input.message", input.message)
+
+            local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
+            local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
+            local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
+            local senderfullname = senderfirstname..' '..senderlastname
+
+            Debug("sendertelegram:", sendertelegram)
+            Debug("senderfullname:", senderfullname)
+            Debug("input.recipient:", input.recipient)
+            Debug("input.subject:", input.subject)
+            Debug("input.message:", input.message)
+
+            Debug("targetPed:", targetPed)
+
+            FreezeEntityPosition(ped, false)
+            SetEntityInvincible(ped, false)
+            ClearPedTasks(ped)
+            ClearPedSecondaryTask(ped)
+
+            Wait(3000)
+
+            TaskFlyToCoord(cuteBird, 0, targetCoords.x - coordsOffset, targetCoords.y - coordsOffset, targetCoords.z + 75, 1, 0)
+
+            Wait(Config.BirdArrivalDelay)
 
             SetEntityInvincible(cuteBird, false)
             SetEntityCanBeDamaged(cuteBird, true)
             SetEntityAsMissionEntity(cuteBird, false, false)
             SetEntityAsNoLongerNeeded(cuteBird)
             DeleteEntity(cuteBird)
+            RemoveBlip(birdBlip)
 
-            if birdBlip ~= nil then
-                RemoveBlip(birdBlip)
-            end
-
-            RSGCore.Functions.Notify(Lang:t('error.cancel_send'), 'error')
-
-            return
+            TriggerServerEvent('rsg-telegram:server:SendMessage', senderID, sendertelegram, senderfullname, input.recipient, Lang:t('desc.message_prefix')..': '..input.subject, input.message)
+        else
+            RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
         end
-
-        Debug("input.recipient", input.recipient)
-        Debug("input.subject", input.subject)
-        Debug("input.message", input.message)
-
-        local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
-        local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
-        local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
-        local senderfullname = senderfirstname..' '..senderlastname
-
-        Debug("sendertelegram:", sendertelegram)
-        Debug("senderfullname:", senderfullname)
-        Debug("input.recipient:", input.recipient)
-        Debug("input.subject:", input.subject)
-        Debug("input.message:", input.message)
-
-        Debug("targetPed:", targetPed)
-
-        FreezeEntityPosition(ped, false)
-        SetEntityInvincible(ped, false)
-        ClearPedTasks(ped)
-        ClearPedSecondaryTask(ped)
-
-        Wait(3000)
-
-        TaskFlyToCoord(cuteBird, 0, targetCoords.x - coordsOffset, targetCoords.y - coordsOffset, targetCoords.z + 75, 1, 0)
-
-        Wait(Config.BirdArrivalDelay)
-
-        SetEntityInvincible(cuteBird, false)
-        SetEntityCanBeDamaged(cuteBird, true)
-        SetEntityAsMissionEntity(cuteBird, false, false)
-        SetEntityAsNoLongerNeeded(cuteBird)
-        DeleteEntity(cuteBird)
-        RemoveBlip(birdBlip)
-
-        TriggerServerEvent('rsg-telegram:server:SendMessage', senderID, sendertelegram, senderfullname, input.recipient, Lang:t('desc.message_prefix')..': '..input.subject, input.message)
     end)
 end)
 
@@ -738,5 +747,33 @@ RegisterNetEvent('rsg-telegram:client:AddPersonMenu', function()
 end)
 
 RegisterNetEvent('rsg-telegram:client:RemovePersonMenu', function()
-    
+    RSGCore.Functions.TriggerCallback('rsg-telegram:server:GetPlayers', function(players)
+        local option = {}
+
+        for i = 1, #players do
+            local citizenid = players[i].citizenid
+            local fullname = players[i].name
+            local content = {value = citizenid, text = fullname..' ('..citizenid..')'}
+            option[#option + 1] = content
+        end
+
+
+
+        local input = exports['rsg-input']:ShowInput({
+        header = "Remove Person",
+        submitText = "Remove",
+            inputs = {
+                {
+                    text = "Recipient",
+                    name = "citizenid",
+                    type = "select",
+                    options = option
+                },
+            }
+        })
+
+        if input ~= nil then
+            TriggerServerEvent('rsg-telegram:server:RemovePerson', input.citizenid)
+        end
+    end)
 end)

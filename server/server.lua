@@ -162,7 +162,11 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayers', function(sour
     exports.oxmysql:execute('SELECT * FROM `address_book` WHERE owner = @owner  ORDER BY name ASC', {
         ["@owner"] = xPlayer.PlayerData.citizenid
     }, function(result)
-        cb(result)
+        if result[1] then
+            cb(result)
+        else
+            cb(nil)
+        end
     end)
 end)
 
@@ -188,6 +192,20 @@ AddEventHandler('rsg-telegram:server:SavePerson', function(name,cid)
     while xPlayer == nil do Wait(0) end
     exports.oxmysql:execute('INSERT INTO address_book (`citizenid`, `name`, `owner`) VALUES (?, ?, ?);', {cid, name, xPlayer.PlayerData.citizenid})
     RSGCore.Functions.Notify(src, "New Person add Successfuly" , 'success', 3000)
+end)
+
+RegisterServerEvent('rsg-telegram:server:RemovePerson')
+AddEventHandler('rsg-telegram:server:RemovePerson', function(cid)
+    local src = source
+    local xPlayer = RSGCore.Functions.GetPlayer(src)
+    while xPlayer == nil do Wait(0) end
+    MySQL.Async.execute("DELETE FROM address_book WHERE owner like @owner AND citizenid like @citizenid",
+    {
+        ["@owner"] = xPlayer.PlayerData.citizenid,
+        ['citizenid'] = cid
+    })
+
+    RSGCore.Functions.Notify(src, Lang:t('success.delete_success') , 'success', 3000)
 end)
 
 
