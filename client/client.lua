@@ -102,9 +102,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
 
         for i = 1, #players do
             local citizenid = players[i].citizenid
-            local firstname = json.decode(players[i].charinfo).firstname
-            local lastname = json.decode(players[i].charinfo).lastname
-            local fullname = firstname..' '..lastname
+            local fullname = players[i].name
             local content = {value = citizenid, text = fullname..' ('..citizenid..')'}
             
             option[#option + 1] = content
@@ -495,14 +493,13 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
         for i = 1, #players do
             local targetPlayer = players[i]
 
-            sourceplayer = targetPlayer.sourceplayer
+            
             citizenid = targetPlayer.citizenid
             name = targetPlayer.name
-            local content = {value = sourceplayer, text = '('..citizenid..') '..name}
+            local content = {value = citizenid, text = '('..citizenid..') '..name}
 
             option[#option + 1] = content
         end
-
         local input = exports['rsg-input']:ShowInput
         ({
             header = Lang:t('desc.send_message_header'),
@@ -676,4 +673,70 @@ AddEventHandler("onResourceStop", function(resourceName)
             RemoveBlip(blipEntries[i].handle)
         end
     end
+end)
+
+
+-- AddressBook
+RegisterNetEvent('rsg-telegram:client:OpenAddressbook', function()
+    exports['rsg-menu']:openMenu({
+        {
+            header = "| Address Book |",
+            isMenuHeader = true,
+            icon   = 'fa-solid fa-envelope-open-text',
+        },
+        {
+            header = "➕ | Add New Person",
+            txt = "Add new Person To Your Addressbook",
+            params = {
+                event = 'rsg-telegram:client:AddPersonMenu',
+                isServer = false
+            }
+        },
+        {
+            header = "❌ | Remove Person",
+            txt = "Remove Person From your Addressbook",
+            params = {
+                event = 'rsg-telegram:client:RemovePersonMenu',
+                isServer = false
+            }
+        },
+        {
+            header = "Close Menu",
+            txt = '',
+            icon   = 'fa-solid fa-circle-xmark',
+            params = {
+                event = 'rsg-menu:closeMenu',
+            }
+        },
+    })
+end)
+
+RegisterNetEvent('rsg-telegram:client:AddPersonMenu', function()
+    local input = exports['rsg-input']:ShowInput({
+        header = "Add New Person",
+        submitText = "Submit",
+            inputs = {
+                
+                {
+                    type = 'text',
+                    name = 'name',
+                    text = 'Name',
+                    isRequired = true,
+                },
+                {
+                    type = 'text',
+                    name = 'cid',
+                    text = 'CitizenId',
+                    isRequired = true,
+                },
+            }
+        })
+
+        if input ~= nil then
+            TriggerServerEvent('rsg-telegram:server:SavePerson', input.name, input.cid)
+        end
+end)
+
+RegisterNetEvent('rsg-telegram:client:RemovePersonMenu', function()
+    
 end)

@@ -18,16 +18,14 @@ AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, se
     local Player = RSGCore.Functions.GetPlayer(src)
 
     if Player == nil then return end
-
-    local _tgtid = tonumber(tgtid)
-    local targetPlayer = RSGCore.Functions.GetPlayer(_tgtid)
-
+    -- local _tgtid = tonumber(tgtid)
+    local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(tgtid)
     if targetPlayer == nil then
         RSGCore.Functions.Notify(src, Lang:t('error.player_unavailable'), 'error', 5000)
         return
     end
 
-    if not Config.AllowSendToSelf and src == _tgtid then
+    if not Config.AllowSendToSelf and Player.PlayerData.citizenid == tgtid then
         RSGCore.Functions.Notify(src, Lang:t('error.send_to_self'), 'error', 5000)
         return
     end
@@ -44,8 +42,7 @@ AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, se
     end
 
     exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`) VALUES (?, ?, ?, ?, ?, ?, ?)',{_citizenid, targetPlayerName, sender, sendername, subject, sentDate, message})
-
-    TriggerClientEvent('rsg-telegram:client:ReceiveMessage', _tgtid, senderID, targetPlayerName)
+    TriggerClientEvent('rsg-telegram:client:ReceiveMessage', targetPlayer.PlayerData.cid, senderID, targetPlayerName)
 
     if Config.ChargePlayer then
         Player.Functions.RemoveMoney('cash', cost, 'send-post')
@@ -160,35 +157,42 @@ end)
 -- Get Players
 RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayers', function(source, cb)
     local players = {}
-
-    for _,v in pairs(RSGCore.Functions.GetPlayers()) do
-        local target = GetPlayerPed(v)
-        local ped = RSGCore.Functions.GetPlayer(v)
-
-        players[#players + 1] =
-        {
-            name = ped.PlayerData.charinfo.firstname .. ' ' .. ped.PlayerData.charinfo.lastname,
-            id = v,
-            coords = GetEntityCoords(target),
-            citizenid = ped.PlayerData.citizenid,
-            sources = GetPlayerPed(ped.PlayerData.source),
-            sourceplayer = ped.PlayerData.source
-        }
-    end
-
-    table.sort(players, function(a, b)
-        return a.id < b.id
+    local src = source
+    local xPlayer = RSGCore.Functions.GetPlayer(src)
+    exports.oxmysql:execute('SELECT * FROM `address_book` WHERE owner = @owner  ORDER BY name ASC', {
+        ["@owner"] = xPlayer.PlayerData.citizenid
+    }, function(result)
+        cb(result)
     end)
-
-    cb(players)
 end)
 
 RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayersPostOffice', function(source, cb)
-    exports.oxmysql:execute('SELECT * FROM `players` ORDER BY JSON_VALUE(charinfo,\'$.firstname\') ASC', {}, function(result)
+    local src = source
+    local xPlayer = RSGCore.Functions.GetPlayer(src)
+    exports.oxmysql:execute('SELECT * FROM `address_book` WHERE owner = @owner  ORDER BY name ASC', {
+        ["@owner"] = xPlayer.PlayerData.citizenid
+    }, function(result)
         if result[1] then
             cb(result)
         else
             cb(nil)
         end
     end)
+end)
+
+
+RegisterServerEvent('rsg-telegram:server:SavePerson')
+AddEventHandler('rsg-telegram:server:SavePerson', function(name,cid)
+    local src = source
+    local xPlayer = RSGCore.Functions.GetPlayer(src)
+    while xPlayer == nil do Wait(0) end
+    exports.oxmysql:execute('INSERT INTO address_book (`citizenid`, `name`, `owner`) VALUES (?, ?, ?);', {cid, name, xPlayer.PlayerData.citizenid})
+    RSGCore.Functions.Notify(src, "New Person add Successfuly" , 'success', 3000)
+end)
+
+
+-- Command
+RSGCore.Commands.Add('addressbook', 'Your Personal Addressbook', {}, false, function(source)
+    local src = source
+    TriggerClientEvent('rsg-telegram:client:OpenAddressbook', src)
 end)

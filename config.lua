@@ -2,7 +2,7 @@ Config = {}
 
 -- General Settings
 Config.Debug                = false -- Dnable/disable debug functions
-Config.AllowSendToSelf      = false -- A debug functions to allow sending letter to ourself (testing purpose)
+Config.AllowSendToSelf      = true -- A debug functions to allow sending letter to ourself (testing purpose)
 Config.ChargePlayer         = true -- Whether to charge the player when sending a letter
 Config.CostPerLetter        = 0.50 -- Cost for sending a letter
 
