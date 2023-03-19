@@ -694,6 +694,14 @@ RegisterNetEvent('rsg-telegram:client:OpenAddressbook', function()
             icon   = 'fa-solid fa-envelope-open-text',
         },
         {
+            header = "📝 | View Addressbook",
+            txt = "See All of Person in my Addressbook",
+            params = {
+                event = 'rsg-telegram:client:ViewAddressBook',
+                isServer = false
+            }
+        },
+        {
             header = "➕ | Add New Person",
             txt = "Add new Person To Your Addressbook",
             params = {
@@ -745,35 +753,67 @@ RegisterNetEvent('rsg-telegram:client:AddPersonMenu', function()
             TriggerServerEvent('rsg-telegram:server:SavePerson', input.name, input.cid)
         end
 end)
+RegisterNetEvent('rsg-telegram:client:ViewAddressBook', function()
+    RSGCore.Functions.TriggerCallback('rsg-telegram:server:GetPlayers', function(players)
+        if players ~= nil then
+            local options = {
+                {
+                    header = "| Address Book |",
+                    isMenuHeader = true,
+                    icon   = 'fa-solid fa-envelope-open-text',
+                },
+            }
+            for i = 1, #players do
+                local player = players[i]
+                options[#options + 1] = {
+                    header = player.name,
+                    txt = "P.O : "..player.citizenid,
+                    disabled = true
+                }
+            end
+            options[#options+1] = 
+            {
+                header = "Close Menu",
+                txt = '',
+                icon   = 'fa-solid fa-circle-xmark',
+                params = {
+                    event = 'rsg-menu:closeMenu',
+                }
+            }
+            exports['rsg-menu']:openMenu(options)
+        else
+            RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
+        end
+    end)
+end)
 
 RegisterNetEvent('rsg-telegram:client:RemovePersonMenu', function()
     RSGCore.Functions.TriggerCallback('rsg-telegram:server:GetPlayers', function(players)
-        local option = {}
-
-        for i = 1, #players do
-            local citizenid = players[i].citizenid
-            local fullname = players[i].name
-            local content = {value = citizenid, text = fullname..' ('..citizenid..')'}
-            option[#option + 1] = content
-        end
-
-
-
-        local input = exports['rsg-input']:ShowInput({
-        header = "Remove Person",
-        submitText = "Remove",
-            inputs = {
-                {
-                    text = "Recipient",
-                    name = "citizenid",
-                    type = "select",
-                    options = option
-                },
-            }
-        })
-
-        if input ~= nil then
-            TriggerServerEvent('rsg-telegram:server:RemovePerson', input.citizenid)
+        if players ~= nil then
+            local option = {}
+            for i = 1, #players do
+                local citizenid = players[i].citizenid
+                local fullname = players[i].name
+                local content = {value = citizenid, text = fullname..' ('..citizenid..')'}
+                option[#option + 1] = content
+            end
+            local input = exports['rsg-input']:ShowInput({
+            header = "Remove Person",
+            submitText = "Remove",
+                inputs = {
+                    {
+                        text = "Recipient",
+                        name = "citizenid",
+                        type = "select",
+                        options = option
+                    },
+                }
+            })
+            if input ~= nil then
+                TriggerServerEvent('rsg-telegram:server:RemovePerson', input.citizenid)
+            end
+        else
+            RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
         end
     end)
 end)
