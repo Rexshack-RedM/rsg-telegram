@@ -75,7 +75,7 @@ AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, se
     RSGCore.Functions.Notify(src, Lang:t("success.letter_delivered", {pName = tFullName}), 'success', 5000)
 
     if Config.ChargePlayer then
-        Player.Functions.RemoveMoney('cash', cost, 'send teletram')
+        Player.Functions.RemoveMoney('cash', cost, 'send telegram')
     end
 end)
 
