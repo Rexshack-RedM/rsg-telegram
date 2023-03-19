@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS `address_book` (
+`id` INT(11) NOT NULL AUTO_INCREMENT,
+`citizenid` VARCHAR(50) NOT NULL,
+`name`  VARCHAR(50) NOT NULL,
+`owner`  VARCHAR(50) NOT NULL,
+PRIMARY KEY (`id`));
