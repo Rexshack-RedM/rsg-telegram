@@ -13,6 +13,7 @@ server_scripts {
 }
 
 shared_scripts {
+    '@ox_lib/init.lua',
     'config.lua',
     'shared/functions.lua',
     '@rsg-core/shared/locale.lua',
@@ -29,6 +30,10 @@ files {
     'html/style.css',
     'html/script.js',
     'html/bg.png'
+}
+
+dependencies {
+   'ox_lib'
 }
 
 lua54 'yes'
