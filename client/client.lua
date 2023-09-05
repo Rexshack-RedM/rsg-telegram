@@ -62,37 +62,41 @@ end)
 
 -- Telegram Menu
 RegisterNetEvent('rsg-telegram:client:TelegramMenu', function(data)
-    exports['rsg-menu']:openMenu({
-        {
-            header = "| Telegram Menu |",
-            isMenuHeader = true,
-            icon   = 'fa-solid fa-envelope-open-text',
-        },
-        {
-            header = "📥 | Read Messages",
-            txt = "read your telegram messages",
-            params = {
-                event = 'rsg-telegram:client:ReadMessages',
-                isServer = false
-            }
-        },
-        {
-            header = "📤 | Send Telegram",
-            txt = "send a telegram to another player",
-            params = {
-                event = 'rsg-telegram:client:WriteMessagePostOffice',
-                isServer = false
-            }
-        },
-        {
-            header = "Close Menu",
-            txt = '',
-            icon   = 'fa-solid fa-circle-xmark',
-            params = {
-                event = 'rsg-menu:closeMenu',
-            }
-        },
+    lib.registerContext({
+        id: 'telegram_menu',
+        title: "| Telegram Menu |",
+        position: 'top-right',
+        options: {
+            {
+                title: "View Address Book",
+                description: "View my address book",
+                icon: 'fa-solid fa-book',
+                event: 'rsg-telegram:client:OpenAddressbook',
+                args: {
+                    isServer: false
+                }
+            },
+            {
+                title: "Read Messages",
+                description: "Read my messages",
+                icon: 'fa-solid fa-file-contract',
+                event: 'rsg-telegram:client:ReadMessages',
+                args: {
+                    isServer: false
+                }
+            },
+            {
+                title: "Send Messages",
+                description: "Send a telegram to another player",
+                icon: 'fa-solid fa-pen-to-square',
+                event: 'rsg-telegram:client:WriteMessagePostOffice',
+                args: {
+                    isServer: false
+                }
+            },
+        }
     })
+    lib.showContext('telegram_menu')
 end)
 
 -- Write Message
@@ -687,46 +691,45 @@ end)
 
 -- AddressBook
 RegisterNetEvent('rsg-telegram:client:OpenAddressbook', function()
-    exports['rsg-menu']:openMenu({
-        {
-            header = "| Address Book |",
-            isMenuHeader = true,
-            icon   = 'fa-solid fa-envelope-open-text',
-        },
-        {
-            header = "📝 | View Addressbook",
-            txt = "See All of Person in my Addressbook",
-            params = {
+    lib.registerContext({
+        id = 'addressbook_menu',
+        title = "| Address Book |",
+        position = 'top-right',
+        options = {
+            {
+                title = "View Address Book",
+                description = "View all contacts in my address book",
+                icon = 'fa-solid fa-book',
                 event = 'rsg-telegram:client:ViewAddressBook',
-                isServer = false
-            }
-        },
-        {
-            header = "➕ | Add New Person",
-            txt = "Add new Person To Your Addressbook",
-            params = {
+                args = {
+                    isServer = false
+                }
+            },
+            {
+                title = "Add New Contact",
+                description = "Add a new contact to your address book",
+                icon = 'fa-solid fa-book',
+                iconColor = 'green',
                 event = 'rsg-telegram:client:AddPersonMenu',
-                isServer = false
-            }
-        },
-        {
-            header = "❌ | Remove Person",
-            txt = "Remove Person From your Addressbook",
-            params = {
+                args = {
+                    isServer = false
+                }
+            },
+            {
+                title = "Remove Contact",
+                description = "Remove a contact from your address book",
+                icon = 'fa-solid fa-book',
+                iconColor = 'red',
                 event = 'rsg-telegram:client:RemovePersonMenu',
-                isServer = false
-            }
-        },
-        {
-            header = "Close Menu",
-            txt = '',
-            icon   = 'fa-solid fa-circle-xmark',
-            params = {
-                event = 'rsg-menu:closeMenu',
-            }
-        },
+                args = {
+                    isServer = false
+                }
+            },
+        }
     })
+    lib.showContext('addressbook_menu')
 end)
+
 
 RegisterNetEvent('rsg-telegram:client:AddPersonMenu', function()
     local input = exports['rsg-input']:ShowInput({
