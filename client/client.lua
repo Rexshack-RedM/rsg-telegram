@@ -753,36 +753,44 @@ RegisterNetEvent('rsg-telegram:client:AddPersonMenu', function()
             TriggerServerEvent('rsg-telegram:server:SavePerson', input.name, input.cid)
         end
 end)
+
 RegisterNetEvent('rsg-telegram:client:ViewAddressBook', function()
     RSGCore.Functions.TriggerCallback('rsg-telegram:server:GetPlayers', function(players)
         if players ~= nil then
             local options = {
                 {
-                    header = "| Address Book |",
+                    title = "| Address Book |",
+                    description = "View your address book",
+                    icon = 'fa-solid fa-envelope-open-text',
                     isMenuHeader = true,
-                    icon   = 'fa-solid fa-envelope-open-text',
                 },
             }
             for i = 1, #players do
                 local player = players[i]
                 options[#options + 1] = {
-                    header = player.name,
-                    txt = "P.O : "..player.citizenid,
+                    title = player.name,
+                    description = "P.O : " .. player.citizenid,
                     disabled = true
                 }
             end
-            options[#options+1] = 
-            {
-                header = "Close Menu",
-                txt = '',
-                icon   = 'fa-solid fa-circle-xmark',
-                params = {
-                    event = 'rsg-menu:closeMenu',
+            options[#options + 1] = {
+                title = "| Back |",
+                description = "Go back to the address book menu",
+                icon = 'fa-solid fa-circle-xmark',
+                event = 'rsg-telegram:client:OpenAddressbook',
+                args = {
+                    isServer = false
                 }
             }
-            exports['rsg-menu']:openMenu(options)
+            lib.registerContext({
+                id = 'addressbook_view',  -- Corrected the context ID here
+                title = "| Address Book |",
+                position = 'top-right',
+                options = options
+            })
+            lib.showContext('addressbook_view')  -- Use the correct context ID here
         else
-            RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
+            RSGCore.Functions.Notify("You need to add people to your address book", 'error')
         end
     end)
 end)
