@@ -61,42 +61,36 @@ Citizen.CreateThread(function()
 end)
 
 -- Telegram Menu
-RegisterNetEvent('rsg-telegram:client:TelegramMenu', function(data)
+RegisterNetEvent('rsg-telegram:client:TelegramMenu', function()
+    local MenuTelegram = {
+        {
+            title = "View Address Book",
+            icon = "fa-solid fa-book",
+            description = 'View my address book',
+            event = "rsg-telegram:client:OpenAddressbook",
+            args = {}
+        },
+        {
+            title = "Read Messages",
+            icon = "fa-solid fa-file-contract",
+            description = 'Read my messages',
+            event = "rsg-telegram:client:ReadMessages",
+            args = {}
+        },
+        {
+            title = "Send Messages",
+            icon = "fa-solid fa-pen-to-square",
+            description = 'Send a telegram to another player',
+            event = "rsg-telegram:client:WriteMessagePostOffice",
+            args = {}
+        },
+    }
     lib.registerContext({
-        id: 'telegram_menu',
-        title: "| Telegram Menu |",
-        position: 'top-right',
-        options: {
-            {
-                title: "View Address Book",
-                description: "View my address book",
-                icon: 'fa-solid fa-book',
-                event: 'rsg-telegram:client:OpenAddressbook',
-                args: {
-                    isServer: false
-                }
-            },
-            {
-                title: "Read Messages",
-                description: "Read my messages",
-                icon: 'fa-solid fa-file-contract',
-                event: 'rsg-telegram:client:ReadMessages',
-                args: {
-                    isServer: false
-                }
-            },
-            {
-                title: "Send Messages",
-                description: "Send a telegram to another player",
-                icon: 'fa-solid fa-pen-to-square',
-                event: 'rsg-telegram:client:WriteMessagePostOffice',
-                args: {
-                    isServer: false
-                }
-            },
-        }
+        id = "telegram_menu",
+        title = "Telegram Menu",
+        options = MenuTelegram
     })
-    lib.showContext('telegram_menu')
+    lib.showContext("telegram_menu")
 end)
 
 -- Write Message
@@ -108,7 +102,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
             for i = 1, #players do
                 local citizenid = players[i].citizenid
                 local fullname = players[i].name
-                local content = {value = citizenid, text = fullname..' ('..citizenid..')'}
+                local content = {value = citizenid, label = fullname..' ('..citizenid..')'}
                 
                 option[#option + 1] = content
             end
@@ -118,40 +112,34 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
             if Config.ChargePlayer then
                 sendButton = Lang:t("desc.send_button_paid", {lPrice = tonumber(Config.CostPerLetter)})
             end
-    
-            local input = exports['rsg-input']:ShowInput({
-            header = Lang:t('desc.send_message_header'),
-            submitText = sendButton,
-                inputs = {
-                    {
-                        text = "Recipient",
-                        name = "recipient",
-                        type = "select",
-                        options = option
-                    },
-                    {
-                        type = 'text',
-                        name = 'subject',
-                        text = 'subject',
-                        isRequired = true,
-                    },
-                    {
-                        type = 'text',
-                        name = 'message',
-                        text = 'add your message here',
-                        isRequired = true,
-                    },
-                }
+
+            local input = lib.inputDialog(Lang:t('desc.send_message_header'), {
+                {type = 'select', options = option, required = true, default = 'Recipient' },
+                {type = 'input', label = 'Subject', required = true},
+                {type = 'input', label = 'Message', required = true},
             })
+            if not input then return end
+
+            local recipient = input[1]
+            local subject = input[2]
+            local message = input[3]
     
-            if input ~= nil then
-                local pID =  PlayerId()
-                senderID = GetPlayerServerId(pID)
-                local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
-                local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
-                local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
-                local senderfullname = senderfirstname..' '..senderlastname
-                TriggerServerEvent('rsg-telegram:server:SendMessagePostOffice', sendertelegram, senderfullname, input.recipient, input.subject, input.message)
+            if recipient and subject and message then
+                local alert = lib.alertDialog({
+                    header = sendButton,
+                    content = 'Are you sure?',
+                    centered = true,
+                    cancel = true
+                })
+                if alert == 'confirm' then
+                    local pID =  PlayerId()
+                    senderID = GetPlayerServerId(pID)
+                    local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
+                    local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
+                    local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
+                    local senderfullname = senderfirstname..' '..senderlastname
+                    TriggerServerEvent('rsg-telegram:server:SendMessagePostOffice', sendertelegram, senderfullname, recipient, subject, message)
+                end
             end
         else
             RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
@@ -506,46 +494,18 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                 
                 citizenid = targetPlayer.citizenid
                 name = targetPlayer.name
-                local content = {value = citizenid, text = '('..citizenid..') '..name}
+                local content = {value = citizenid, label = '('..citizenid..') '..name}
 
                 option[#option + 1] = content
             end
-            local input = exports['rsg-input']:ShowInput
-            ({
-                header = Lang:t('desc.send_message_header'),
-                submitText = sendButton,
-                inputs =
-                {
-                    --[[
-                    {
-                        type = 'select',
-                        name = 'recipient',
-                        text = Lang:t('desc.recipient'),
-                        isRequired = true
-                    },
-                    ]]--
-                    {
-                        text = Lang:t('desc.recipient'),
-                        name = "recipient",
-                        type = "select",
-                        options = option
-                    },
-                    {
-                        type = 'text',
-                        name = 'subject',
-                        text = Lang:t('desc.subject'),
-                        isRequired = true
-                    },
-                    {
-                        type = 'text',
-                        name = 'message',
-                        text = Lang:t('desc.message'),
-                        isRequired = true
-                    }
-                }
+
+            local input = lib.inputDialog(Lang:t('desc.send_message_header'), {
+                { type = 'select', options = option, required = true, default = 'Recipient' },
+                {type = 'input', label = 'Subject', required = true},
+                {type = 'input', label = 'Message', required = true},
             })
 
-            if input == nil then
+            if not input then
                 FreezeEntityPosition(PlayerPedId(), false)
                 SetEntityInvincible(PlayerPedId(), false)
                 ClearPedTasks(PlayerPedId())
@@ -566,44 +526,59 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                 return
             end
 
-            Debug("input.recipient", input.recipient)
-            Debug("input.subject", input.subject)
-            Debug("input.message", input.message)
+            
+            local recipient = input[1]
+            local subject = input[2]
+            local message = input[3]
+            if recipient and subject and message then
+                local alert = lib.alertDialog({
+                    header = sendButton,
+                    content = 'Are you sure?',
+                    centered = true,
+                    cancel = true
+                })
+                if alert == 'confirm' then
 
-            local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
-            local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
-            local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
-            local senderfullname = senderfirstname..' '..senderlastname
+                    Debug("recipient", recipient)
+                    Debug("subject", subject)
+                    Debug("message", message)
 
-            Debug("sendertelegram:", sendertelegram)
-            Debug("senderfullname:", senderfullname)
-            Debug("input.recipient:", input.recipient)
-            Debug("input.subject:", input.subject)
-            Debug("input.message:", input.message)
+                    local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
+                    local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
+                    local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
+                    local senderfullname = senderfirstname..' '..senderlastname
 
-            Debug("targetPed:", targetPed)
+                    Debug("sendertelegram:", sendertelegram)
+                    Debug("senderfullname:", senderfullname)
+                    Debug("recipient:", recipient)
+                    Debug("subject:", subject)
+                    Debug("message:", message)
 
-            FreezeEntityPosition(ped, false)
-            SetEntityInvincible(ped, false)
-            ClearPedTasks(ped)
-            ClearPedSecondaryTask(ped)
+                    Debug("targetPed:", targetPed)
 
-            Wait(3000)
+                    FreezeEntityPosition(ped, false)
+                    SetEntityInvincible(ped, false)
+                    ClearPedTasks(ped)
+                    ClearPedSecondaryTask(ped)
 
-            TaskFlyToCoord(cuteBird, 0, targetCoords.x - coordsOffset, targetCoords.y - coordsOffset, targetCoords.z + 75, 1, 0)
+                    Wait(3000)
 
-            Wait(Config.BirdArrivalDelay)
+                    TaskFlyToCoord(cuteBird, 0, targetCoords.x - coordsOffset, targetCoords.y - coordsOffset, targetCoords.z + 75, 1, 0)
 
-            SetEntityInvincible(cuteBird, false)
-            SetEntityCanBeDamaged(cuteBird, true)
-            SetEntityAsMissionEntity(cuteBird, false, false)
-            SetEntityAsNoLongerNeeded(cuteBird)
-            DeleteEntity(cuteBird)
-            RemoveBlip(birdBlip)
+                    Wait(Config.BirdArrivalDelay)
 
-            TriggerServerEvent('rsg-telegram:server:SendMessage', senderID, sendertelegram, senderfullname, input.recipient, Lang:t('desc.message_prefix')..': '..input.subject, input.message)
-        else
-            RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
+                    SetEntityInvincible(cuteBird, false)
+                    SetEntityCanBeDamaged(cuteBird, true)
+                    SetEntityAsMissionEntity(cuteBird, false, false)
+                    SetEntityAsNoLongerNeeded(cuteBird)
+                    DeleteEntity(cuteBird)
+                    RemoveBlip(birdBlip)
+
+                    TriggerServerEvent('rsg-telegram:server:SendMessage', senderID, sendertelegram, senderfullname, recipient, Lang:t('desc.message_prefix')..': '..subject, message)
+                else
+                    RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
+                end
+            end
         end
     end)
 end)
@@ -732,29 +707,17 @@ end)
 
 
 RegisterNetEvent('rsg-telegram:client:AddPersonMenu', function()
-    local input = exports['rsg-input']:ShowInput({
-        header = "Add New Person",
-        submitText = "Submit",
-            inputs = {
-                
-                {
-                    type = 'text',
-                    name = 'name',
-                    text = 'Name',
-                    isRequired = true,
-                },
-                {
-                    type = 'text',
-                    name = 'cid',
-                    text = 'CitizenId',
-                    isRequired = true,
-                },
-            }
-        })
+    local input = lib.inputDialog('Add New Person', {
+        { type = 'input', label = 'Name',      required = true },
+        { type = 'input', label = 'CitizenId', required = true },
+    })
+    if not input then return end
 
-        if input ~= nil then
-            TriggerServerEvent('rsg-telegram:server:SavePerson', input.name, input.cid)
-        end
+    local name = input[1]
+    local cid = input[2]
+    if name and cid then
+        TriggerServerEvent('rsg-telegram:server:SavePerson', name, cid)
+    end
 end)
 
 RegisterNetEvent('rsg-telegram:client:ViewAddressBook', function()
@@ -805,23 +768,18 @@ RegisterNetEvent('rsg-telegram:client:RemovePersonMenu', function()
             for i = 1, #players do
                 local citizenid = players[i].citizenid
                 local fullname = players[i].name
-                local content = {value = citizenid, text = fullname..' ('..citizenid..')'}
+                local content = { value = citizenid, label = fullname .. ' (' .. citizenid .. ')' }
                 option[#option + 1] = content
             end
-            local input = exports['rsg-input']:ShowInput({
-            header = "Remove Person",
-            submitText = "Remove",
-                inputs = {
-                    {
-                        text = "Recipient",
-                        name = "citizenid",
-                        type = "select",
-                        options = option
-                    },
-                }
+
+            local input = lib.inputDialog("Remove Person", {
+                { type = 'select', options = option, required = true, default = 'Recipient' }
             })
-            if input ~= nil then
-                TriggerServerEvent('rsg-telegram:server:RemovePerson', input.citizenid)
+            if not input then return end
+            
+            local citizenid = input[1]
+            if citizenid then
+                TriggerServerEvent('rsg-telegram:server:RemovePerson', citizenid)
             end
         else
             RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
