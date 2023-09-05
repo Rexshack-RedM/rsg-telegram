@@ -102,7 +102,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
             for i = 1, #players do
                 local citizenid = players[i].citizenid
                 local fullname = players[i].name
-                local content = {value = citizenid, text = fullname..' ('..citizenid..')'}
+                local content = {value = citizenid, label = fullname..' ('..citizenid..')'}
                 
                 option[#option + 1] = content
             end
@@ -114,7 +114,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
             end
 
             local input = lib.inputDialog(Lang:t('desc.send_message_header'), {
-                {type = 'select', options = option, required = true },
+                {type = 'select', options = option, required = true, default = 'Recipient' },
                 {type = 'input', label = 'Subject', required = true},
                 {type = 'input', label = 'Message', required = true},
             })
@@ -494,13 +494,13 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                 
                 citizenid = targetPlayer.citizenid
                 name = targetPlayer.name
-                local content = {value = citizenid, text = '('..citizenid..') '..name}
+                local content = {value = citizenid, label = '('..citizenid..') '..name}
 
                 option[#option + 1] = content
             end
 
             local input = lib.inputDialog(Lang:t('desc.send_message_header'), {
-                { type = 'select', options = option, required = true },
+                { type = 'select', options = option, required = true, default = 'Recipient' },
                 {type = 'input', label = 'Subject', required = true},
                 {type = 'input', label = 'Message', required = true},
             })
@@ -768,12 +768,12 @@ RegisterNetEvent('rsg-telegram:client:RemovePersonMenu', function()
             for i = 1, #players do
                 local citizenid = players[i].citizenid
                 local fullname = players[i].name
-                local content = { value = citizenid, text = fullname .. ' (' .. citizenid .. ')' }
+                local content = { value = citizenid, label = fullname .. ' (' .. citizenid .. ')' }
                 option[#option + 1] = content
             end
 
             local input = lib.inputDialog("Remove Person", {
-                { type = 'select', options = option, required = true }
+                { type = 'select', options = option, required = true, default = 'Recipient' }
             })
             if not input then return end
             
