@@ -2,8 +2,8 @@ fx_version 'cerulean'
 rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aware my resources *will* become incompatible once RedM ships.'
 game 'rdr3'
 
-author 'MOVZX'
-description 'Use the Bird Post to send letters to anyone! This mod requires rsg-core, bm-input, and bm-menu.'
+description 'rsg-telegram'
+version '1.0.0'
 
 ui_page('html/ui.html')
 
