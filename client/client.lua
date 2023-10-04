@@ -576,9 +576,11 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
 
                     TriggerServerEvent('rsg-telegram:server:SendMessage', senderID, sendertelegram, senderfullname, recipient, Lang:t('desc.message_prefix')..': '..subject, message)
                 else
-                    RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
+                    lib.notify({ title = 'Address Book Empty', description = 'add a contact to your address book!', type = 'error' })
                 end
             end
+        else
+            lib.notify({ title = 'Address Book Empty', description = 'add a contact to your address book!', type = 'error' })
         end
     end)
 end)
