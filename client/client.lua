@@ -116,7 +116,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
             local input = lib.inputDialog(Lang:t('desc.send_message_header'), {
                 {type = 'select', options = option, required = true, default = 'Recipient' },
                 {type = 'input', label = 'Subject', required = true},
-                {type = 'input', label = 'Message', required = true},
+                {type = 'textarea', label = 'Message', required = true},
             })
             if not input then return end
 
