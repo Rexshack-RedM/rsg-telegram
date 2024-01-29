@@ -51,8 +51,8 @@ Citizen.CreateThread(function()
 
         if pos.showblip == true then
             PostOfficeBlip = Citizen.InvokeNative(0x554D9D53F696D002, 1664425300, pos.coords)
-            SetBlipSprite(PostOfficeBlip, GetHashKey(Config.Blip.blipSprite), true)
-            SetBlipScale(PostOfficeBlip, Config.Blip.blipScale)
+            SetBlipSprite(PostOfficeBlip, GetHashKey(pos.blipsprite), true)
+            SetBlipScale(PostOfficeBlip, pos.blipscale)
             Citizen.InvokeNative(0x9CB1A1623062F402, PostOfficeBlip, pos.name)
 
             blipEntries[#blipEntries + 1] = { type = "BLIP", handle = PostOfficeBlip }
