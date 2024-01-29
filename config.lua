@@ -12,11 +12,6 @@ Config.AutoResurrect    = true -- Auto resurrect the bird when it's died while s
 Config.BirdArrivalDelay = 20000 -- Set the bird to arrives after 20 secs
 Config.BirdTimeout      = 180 -- When timeout reached, the bird will fail to deliver the letter
 
-Config.Blip = {
-    blipSprite = 'blip_post_office', -- Config.Blip.blipSprite
-    blipScale  = 0.2 -- Config.Blip.blipScale
-}
-
 -- prompt locations
 Config.PostOfficeLocations = {
 
