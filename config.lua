@@ -93,7 +93,7 @@ Config.PostOfficeLocations = {
         coords = vector3(-5487.083, -2936.11, -0.402813),
         blipsprite = 'blip_post_office', 
         blipscale  = 0.2,
-        showblip = tru
+        showblip = true
     },
     {
         name = 'Strawberry Post Office',
