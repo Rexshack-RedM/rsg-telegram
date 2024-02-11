@@ -8,8 +8,7 @@
 
 # Dependencies
 - rsg-core
-- rsg-menu
-- rsg-input
+- ox_lib
 
 # Features
 Compared to the original frp_peagle, this resource has many more new features, i.e:
