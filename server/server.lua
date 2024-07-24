@@ -73,7 +73,7 @@ AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, se
     end
 
     exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`) VALUES (?, ?, ?, ?, ?, ?, ?)',{_citizenid, targetPlayerName, sender, sendername, subject, sentDate, message})
-    TriggerClientEvent('rsg-telegram:client:ReceiveMessage', targetPlayer.PlayerData.cid, senderID, targetPlayerName)
+    TriggerClientEvent('rsg-telegram:client:ReceiveMessage', targetPlayer.PlayerData.source, senderID, targetPlayerName)
 
     if Config.ChargePlayer then
         Player.Functions.RemoveMoney('cash', cost, 'send-post')
