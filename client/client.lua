@@ -611,6 +611,17 @@ end)
 -- Get the Message
 RegisterNUICallback('getview', function(data)
     TriggerServerEvent('rsg-telegram:server:GetMessages', tonumber(data.id))
+    TriggerServerEvent('rsg-telegram:server:CheckInbox')
+end)
+
+-- Get the Message all 
+RegisterNUICallback('getviewall', function(data, cb)
+    local ids = data.ids
+    for _, id in ipairs(ids) do
+        TriggerServerEvent('rsg-telegram:server:GetMessages', tonumber(id))
+    end
+    TriggerServerEvent('rsg-telegram:server:CheckInbox')
+    cb('ok')
 end)
 
 -- Message Data
@@ -626,6 +637,24 @@ end)
 -- Delete Message
 RegisterNUICallback('delete', function(data)
     TriggerServerEvent('rsg-telegram:server:DeleteMessage', tonumber(data.id))
+    TriggerServerEvent('rsg-telegram:server:CheckInbox')
+end)
+
+-- Delete Message all
+RegisterNUICallback('deleteall', function(data, cb)
+    local ids = data.ids  -- Un array de IDs
+    for _, id in ipairs(ids) do
+        TriggerServerEvent('rsg-telegram:server:DeleteMessage', tonumber(id))
+    end
+    TriggerServerEvent('rsg-telegram:server:CheckInbox')
+    cb('ok')
+end)
+
+RegisterNUICallback('copymsg', function(data, cb)
+    local id = data.id
+    local message = data.message
+
+    cb({ success = true, message = message })
 end)
 
 -- Close Mailbox

@@ -1,3 +1,8 @@
+.no-select {
+    -webkit-user-select: none; /* Safari */
+    user-select: none;         /* Non-prefixed version, currently supported by Chrome, Opera, and Edge */
+}
+
 body {
     display: flex;
     flex-direction: column;
@@ -13,33 +18,121 @@ ul {
 
 .inbox {
     display: none;
-    color: white;
+    color: #222222c7;
     margin: auto;
-    background-color: #000000f2;
-    width: 750px;
-    height: 650px;
-    padding: 20px;
-    border-radius: 18px;
+    background-color: antiquewhite;
+    width: 60vw;/**/
+    height: 35vw;
+    padding: 1vw;
 }
 
 .header {
-    border-bottom: 1px solid #FFF;
-    display: flex;
+    border-top: 1px solid #22222242;
+    border-bottom: 1px solid #22222242;
     flex-direction: row;
     padding-bottom: 15px;
+    display: flex;
+    justify-content: space-between;
 }
 
 .header h1 {
+}
+
+.header-left {
+    margin-top: 0.4vw;
+    border-top: 1px solid #22222242;
+    border-bottom: 1px solid #22222242;
+    display: flex;
+    height: 100%;
+    width: 20vw;
+    flex-direction: column;
+    padding-bottom: 0.4vw;
+    justify-content: space-between;
+    align-items: center;
+}
+.header-left h1 {
     margin: 0;
     padding: 0;
+    height: 100%;
+    font-size: 2vw;
+    margin-top: 0.4vw ;
+    font-weight: normal;
+    font-family: "RDR Lino Regular";
+    margin-bottom: 0.4vw ;
+}
+.header-left p {
+    margin: 0 ;
+    margin-top: 0.4vw ;
+    height: 100%;
+    padding: 0 ;
+    width:100%;
+    border-top: 1px solid #22222242;
     float: left;
-    font-size: 25px;
-    font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+    font-size: 0.8vw;
     font-weight: normal;
 }
 
-.header div {
-    width: 50%;
+.header-center {
+    margin-top: 0.4vw;
+    border-top: 1px solid #22222242;
+    border-bottom: 1px solid #22222242;
+    display: flex;
+    width: 30vw;
+    flex-direction: column;
+    padding-bottom: 0.4vw;
+    align-items: center;
+    justify-content: space-between;
+}
+.header-center h1 {
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid #22222242;
+    border-bottom: 1px solid #22222242;
+    float: left;
+    height:100%;
+    font-size: 3.5vw;
+    font-family: "RDR Lino Regular";
+    font-weight: normal;
+}
+.header-center p {
+    margin: 0;
+    padding: 0;
+    height:100%;
+    float: left;
+    padding-top: 0.4vw;
+    font-size: 0.8vw;
+    font-weight: normal;
+}
+
+.header-rigth {
+    align-items: flex-end;
+    margin-top: 0.4vw;
+    border-top: 1px solid #22222242;
+    border-bottom: 1px solid #22222242;
+    display: flex;
+    width: 20vw;
+    flex-direction: column;
+    padding-bottom: 0.4vw;
+    justify-content: space-between;
+}
+.header-rigth h1 {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    float: left;
+    font-family: "RDR Lino Regular";
+    font-size: 3vw;
+    font-weight: normal;
+}
+.header-rigth p {
+    margin: 0;
+    padding: 0;
+    padding-top: 0.4vw;
+    padding-bottom: 0.4vw;
+    border-bottom: 1px solid #22222242;
+    float: left;
+    font-size: 0.8vw;
+    font-weight: normal;
 }
 
 #postbox {
@@ -52,31 +145,112 @@ ul {
 
 ::-webkit-scrollbar {
     width: 0px;
-    /* Remove scrollbar space */
     background: transparent;
-    /* Optional: just make scrollbar invisible */
 }
 
 .inboxContainer {
-    height: 350px;
+    /*height: 23vw;*/
+    width: 100%;
 }
 
 .inbox ul {
+    display: flex;
     overflow-x: scroll;
-    height: 360px;
+    height: 19.2vw;
+    flex-direction: column;
+    align-content: space-between;
 }
 
 .inbox_row {
     display: flex;
     flex-direction: row;
-    padding: 10px;
+    padding: 0.4vw;
     background: #22222242;
-    margin-bottom: 10px;
+    margin-bottom: 0.4vw;
 }
 
 .inbox_row:hover {
     cursor: pointer;
+    color: white;
     background: #000;
+}
+
+.inbox_search {
+    display: flex;
+    flex-direction: row;
+    width: auto;
+    padding: 0.4vw;
+    border-bottom: 1px solid #22222242;
+    /* justify-content: space-between; */
+}
+
+/* #searchOptions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: white;
+    border: 1px solid #ccc;
+    display: none;
+    z-index: 1000;
+    max-height: 150px;
+    overflow-y: auto;
+} */
+
+.search-option {
+    padding: 10px;
+    cursor: pointer;
+}
+
+.search-option:hover {
+    background-color: #f0f0f0;
+}
+
+.inbox_header {
+    display: flex;
+    flex-direction: row;
+    margin-top: 0.4vw;
+    padding: 0.4vw;
+    background: #22222242;
+    /*justify-content: space-between;*/
+}
+
+.inbox_Status {
+    margin-left: 0 0.4vw;
+}
+.inbox_subject_title {
+    margin-left: 10vw;
+}
+.inbox_sendername_title {
+    margin-left: 15vw;
+}
+.inbox_date_title {
+    margin-left: 8vw;
+}
+
+.inbox_checkbox {
+    padding: 0 0.4vw;
+    justify-content: space-between;
+}
+
+.searchInput {
+    width: 30%;
+    
+    justify-content: space-between;
+}
+.searchBtn {
+    padding: 0 1vw;
+    justify-content: space-between;
+}
+
+.inbox_button {
+    justify-content: space-between;
+}
+.inbox_button2 {
+    justify-content: space-between;
+}
+.inbox_button3 {
+    justify-content: space-between;
 }
 
 .inbox ul>div {
@@ -84,16 +258,17 @@ ul {
 }
 
 .inbox_subject {
-    width: 60%;
+    width: 50%;
+    padding: 0 0.4vw;
 }
 
 .inbox_sendername {
-    padding-right: 20px;
+    padding: 0 0.4vw;
 	width: 20%;
 }
 
 .inbox_sender {
-    padding-right: 20px;
+    padding: 0 0.4vw;
 }
 
 .inbox_date {
@@ -102,12 +277,13 @@ ul {
 
 .view {
     display: none;
-    padding: 20px;
+    padding: 1vw;
     position: relative;
     margin: auto;
-    width: 800px;
-    height: 400px;
-    background: url("bg.png") no-repeat;
+    width: 70vh;
+    height: 40vh;
+    background-size: 100% 100%;
+    background-image: url(../html/bg.png);
 }
 
 .compose {
@@ -121,62 +297,63 @@ ul {
 }
 
 .inbox i {
-    color: #eae4e4;
 
 }
 
 .inbox_subject i {
     padding-right: 5px;
-	color: white;
 }
 
 .btn {
-    font-size: 17px;
-    background: rgb(166 166 166);
-    border: 1px solid transparent;
-    border-radius: 08px;
-    color: #000;
     text-transform: uppercase;
-    width: auto;
-    display: blockk;
-    margin-left: 55px;
-    margin-top: 150px;
-    padding: 9px;
+    font-size: 1vw;
+    padding: 0.4vw;
+    text-align: center;
     font-family: Impact;
     font-weight: normal;
     letter-spacing: 2px;
-
+    justify-content: space-between;
+    background-color: antiquewhite;
+    scale: 1.0325;
 }
 
 .telegram_header {
     position: relative;
-    margin-top: 52px;
-    margin-bottom: 15px;
-
+    margin-top: 3vw;
+    margin-bottom: 1vw;
+    padding: 1vw;
+    justify-content: space-between;
 }
 
 .telegram_header h1 {
     text-align: center;
+    color: #2222229f;
     text-transform: uppercase;
-	color: white;
 }
 
 .telegram_info {
     display: flex;
-    flex-direction: row;
-	color: #a6a6a6;
+    color: #2222229f;
+    width: 100%;
+    flex-direction: column-reverse;
 }
 
 .telegram_info div {
-    width: 33%;
+    margin-left: -1vw;
+    width: 30%;
 }
 
 .telegram_subject {
-    color: #a6a6a6;
+    padding: 0 1vw;
+    margin-top: 2vw;
+    color: #2222229f;
 }
 
 .telegram_message {
-    color: #a6a6a6;
+    width: 95%;
+    margin-left: 1vw;
+    height: 43%;
+    color: #2222229f;
 }
 
 .btn:hover {
@@ -185,36 +362,31 @@ ul {
 
 a {
     text-decoration: none;
-
 }
 
-.close_view {
-    position: absolute;
-    top: 10px;
-    right: 50px;
-    color: white;
-}
 
 #view_subject {
     padding-top: 5px;
     padding-bottom: 5px;
     font-weight: bolder;
     font-size: 20px;
-	color: #a6a6a6;
+	color: #2222229f;
 }
 
 .telegram_footer {
-    text-align: center;
+    text-align: end;
+    margin-right: 1.5vw;
+    margin-top: -22vw;
 }
 
 .telegram_footer button {
-    background-color: #a6a6a6;
+    background-color: #a6a6a633;
     border: 0;
-    color: #000;
-    padding: 10px;
+    color: #2222229f;
+    padding: 1vh;
     text-transform: uppercase;
     font-weight: bolder;
-    border-radius: 08px;
+    border-radius: 8px;
 }
 
 .compose #subject {
@@ -226,8 +398,9 @@ input[type="submit"]:hover {
 }
 
 input[type="text"] {
-    background: transparent;
-    color: #f11b1b;
+    background: #22222242;
+    width: 30%;
+    color: #222222da;
     border: 0;
 }
 
@@ -247,11 +420,11 @@ textarea {
 }
 
 input::-webkit-input-placeholder {
-    color: #f11b1b;
+    color: #222222da;
 }
 
 textarea::-webkit-input-placeholder {
-    color: #444343;
+    color: #22222242;
     text-transform: normal;
 
 }
@@ -264,4 +437,32 @@ form {
 textarea:focus,
 input:focus {
     outline: none;
+}
+
+#filterOptions {
+    display: none;
+    position: absolute;
+    top: 22.4vw;
+    left: 35vw;
+    background-color: antiquewhite;
+    border: 1px solid #ccc;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+    padding: 0.4vw;
+    border-radius: 4px;
+}
+
+/* Estilo para los botones dentro del menú */
+#filterOptions button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+/* Cambia el fondo cuando se pasa sobre un botón */
+#filterOptions button:hover {
 }
