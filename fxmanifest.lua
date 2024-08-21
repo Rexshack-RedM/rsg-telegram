@@ -9,7 +9,7 @@ ui_page('html/ui.html')
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
-    'server/server.lua'
+    'server/*.lua'
 }
 
 shared_scripts {
