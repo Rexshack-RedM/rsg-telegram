@@ -13,14 +13,14 @@ local function CheckVersion()
     PerformHttpRequest('https://raw.githubusercontent.com/Rexshack-RedM/rsg-telegram/main/version.txt', function(err, text, headers)
         local currentVersion = GetResourceMetadata(GetCurrentResourceName(), 'version')
 
-        if not text then 
+        if not text then
             versionCheckPrint('error', 'Currently unable to run a version check.')
-            return 
+            return
         end
 
         --versionCheckPrint('success', ('Current Version: %s'):format(currentVersion))
         --versionCheckPrint('success', ('Latest Version: %s'):format(text))
-        
+
         if text == currentVersion then
             versionCheckPrint('success', 'You are running the latest version.')
         else
@@ -214,7 +214,6 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayersPostOffice', fun
         end
     end)
 end)
-
 
 RegisterServerEvent('rsg-telegram:server:SavePerson')
 AddEventHandler('rsg-telegram:server:SavePerson', function(name,cid)

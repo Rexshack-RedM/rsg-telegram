@@ -17,7 +17,7 @@ shared_scripts {
     'config.lua',
     'shared/functions.lua',
     '@rsg-core/shared/locale.lua',
-    'locales/en.lua',
+    'locales/es.lua',
     'locales/*.lua'
 }
 
@@ -29,7 +29,7 @@ files {
     'html/ui.html',
     'html/style.css',
     'html/script.js',
-    'html/bg.png'
+    'html/*.png'
 }
 
 dependencies {
