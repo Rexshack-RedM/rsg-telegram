@@ -312,3 +312,56 @@ $('.inbox').addClass('no-select');
 $('.view').addClass('no-select');
 $('#inboxList').addClass('no-select');
 $('.messageCheckbox').addClass('no-select');
+
+
+document.addEventListener('DOMContentLoaded', (event) => {
+    const getRandomText = (array) => array[Math.floor(Math.random() * array.length)];
+
+    document.querySelector('.header-left h1').textContent = getRandomText(headerTexts.title);
+    document.querySelector('.header-left p').textContent = getRandomText(headerTexts.description);
+    document.querySelector('.header-center div:nth-of-type(1) p').textContent = getRandomText(headerTexts.centerText);
+    document.querySelector('.header-center div:nth-of-type(3) h1').textContent = getRandomText(headerTexts.postalTitle);
+    document.querySelector('.header-center div:nth-of-type(4) p').textContent = getRandomText(headerTexts.postalDescription);
+    document.querySelector('.header-rigth p').textContent = getRandomText(headerTexts.commitmentText);
+});
+
+const headerTexts = {
+    title: [
+        'Global Connection',
+        'Universal Link',
+        'Worldwide Network',
+        'Global Bridge'
+    ],
+    description: [
+        'We are the bridge that connects hearts across distance. Every letter, every word, is a bond that unites stories and people, keeping relationships alive. In this fast-paced world, taking the time to send a written message is a gesture of care and dedication that transcends borders.',
+        'Connecting hearts and minds, one message at a time. Every word carries a piece of our soul, bridging distances and uniting lives. In our fast-moving world, a handwritten note is a cherished gesture of love and dedication.',
+        'Bridging distances with every message. Each letter carries a story, connecting lives across the globe. In a world where speed is everything, taking the time to send a personal note shows true commitment.',
+        'We link people through written words, preserving stories and connections. In a world that moves too fast, we take the time to deliver messages that matter, fostering relationships across any distance.',
+        'We function as the bridge that links hearts over long distances. Each message, every word, forges a connection that unites lives and tales, maintaining relationships. In this fast-paced age, sending a personal note is a gesture of care and dedication that spans across borders.',
+        'We serve as a link connecting hearts over vast distances. Each letter, each word, forms a connection that ties stories and individuals, sustaining relationships. In today’s quick-moving world, taking time to send a personal message is a sign of care and devotion that bridges gaps.',
+        'We act as a conduit that brings people together across distances. Every note, every word, creates a link that joins lives and narratives, preserving bonds. In this rapidly moving era, sending a handwritten message is a meaningful act of commitment that crosses boundaries.',
+    ],
+    centerText: [
+        'Your voice, anywhere',
+        'Speak to the world',
+        'Voice of the Globe',
+        'Echoes Everywhere'
+    ],
+    postalTitle: [
+        'Postal Telegrah',
+        'Global Postal',
+        'Universal Mail'
+    ],
+    postalDescription: [
+        'We deliver your message where you need it',
+        'Your message reaches its destination',
+        'Bringing your words to every corner',
+        'Delivering messages worldwide'
+    ],
+    commitmentText: [
+        'Committed to bringing your message to every corner. Trusted postal service for over 100 years, Safe Delivery',
+        'Dedicated to reaching every destination. Over a century of trusted postal service, ensuring safe delivery',
+        'Bringing your messages everywhere with care. A century of reliable service, committed to safe delivery',
+        'Ensuring your messages reach their destination. Over 100 years of trusted postal service, delivering safely'
+    ]
+};
