@@ -142,8 +142,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
                 end
             end
         else
-            RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
-
+            lib.notify({ title = 'Error', description = 'You Need To Add People to Your Addressbook', type = 'error', duration = 7000 })
         end
     end)
 end)
@@ -155,8 +154,7 @@ local function Prompts()
     local ped = PlayerPedId()
 
     if destination < 3 and IsPedOnMount(ped) or IsPedOnVehicle(ped) then
-        RSGCore.Functions.Notify(Lang:t("error.player_on_horse"), 'error')
-
+        lib.notify({ title = 'Error', description = Lang:t('error.player_on_horse'), type = 'error', duration = 7000 })
         Wait(3000)
         return
     end
@@ -348,7 +346,7 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
 
         if insideBuilding ~= 0 then
             if not buildingNotified then
-                RSGCore.Functions.Notify(Lang:t("info.inside_building"), 'error')
+                lib.notify({ title = 'Error', description = Lang:t('info.inside_building'), type = 'error', duration = 7000 })
                 buildingNotified = true
             end
 
@@ -366,9 +364,9 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
 
         if destination < 100 and not notified then
             notified = true
-            RSGCore.Functions.Notify(Lang:t("info.bird_approaching"), 'primary', 3000)
+            lib.notify({ title = 'Info', description = Lang:t('info.bird_approaching'), type = 'info', duration = 7000 })
             Wait(5000)
-            RSGCore.Functions.Notify(Lang:t("info.wait_for_bird"), 'primary', 3000)
+            lib.notify({ title = 'Info', description = Lang:t('info.wait_for_bird'), type = 'info', duration = 7000 })
         end
 
         local IsPedAir = IsEntityInAir(cuteBird, 1)
@@ -402,12 +400,11 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
         end
 
         if birdTime == 0 and cuteBird ~= nil and notified then
-            RSGCore.Functions.Notify(Lang:t("error.delivery_fail1"), 'error', 5000)
+            lib.notify({ title = 'Error', description = Lang:t('error.delivery_fail1'), type = 'error', duration = 7000 })
             Wait(8000)
-            RSGCore.Functions.Notify(Lang:t("error.delivery_fail2"), 'error', 5000)
+            lib.notify({ title = 'Error', description = Lang:t('error.delivery_fail2'), type = 'error', duration = 7000 })
             Wait(8000)
-            RSGCore.Functions.Notify(Lang:t("error.delivery_fail3"), 'error', 5000)
-
+            lib.notify({ title = 'Error', description = Lang:t('error.delivery_fail3'), type = 'error', duration = 7000 })
             SetEntityInvincible(cuteBird, false)
             SetEntityAsMissionEntity(cuteBird, false, false)
             SetEntityAsNoLongerNeeded(cuteBird)
@@ -443,7 +440,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             senderID = GetPlayerServerId(pID)
 
             if IsPedOnMount(ped) or IsPedOnVehicle(ped) then
-                RSGCore.Functions.Notify(Lang:t("error.player_on_horse"), 'error')
+                lib.notify({ title = 'Error', description = Lang:t('error.player_on_horse'), type = 'error', duration = 7000 })
                 return
             end
 
@@ -464,7 +461,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             SpawnBirdPost(playerCoords.x, playerCoords.y - rFar, playerCoords.z, heading, rFar)
 
             if cuteBird == nil then
-                RSGCore.Functions.Notify('The bird got away!', 'error')
+                lib.notify({ title = 'Error', description = 'The bird got away!', type = 'error', duration = 7000 })
                 return
             end
 
@@ -521,7 +518,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                     RemoveBlip(birdBlip)
                 end
 
-                RSGCore.Functions.Notify(Lang:t('error.cancel_send'), 'error')
+                lib.notify({ title = 'Error', description = Lang:t('error.cancel_send'), type = 'error', duration = 7000 })
 
                 return
             end
@@ -787,7 +784,7 @@ RegisterNetEvent('rsg-telegram:client:ViewAddressBook', function()
             })
             lib.showContext('addressbook_view')  -- Use the correct context ID here
         else
-            RSGCore.Functions.Notify("You need to add people to your address book", 'error')
+            lib.notify({ title = 'Error', description = 'You need to add people to your address book', type = 'error', duration = 7000 })
         end
     end)
 end)
@@ -813,7 +810,7 @@ RegisterNetEvent('rsg-telegram:client:RemovePersonMenu', function()
                 TriggerServerEvent('rsg-telegram:server:RemovePerson', citizenid)
             end
         else
-            RSGCore.Functions.Notify("You Need To Add People to Your Addressbook", 'error')
+            lib.notify({ title = 'Error', description = 'You Need To Add People to Your Addressbook', type = 'error', duration = 7000 })
         end
     end)
 end)
