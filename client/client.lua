@@ -431,7 +431,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             local option = {}
 
             if isReceiving then
-                RSGCore.Functions.Notify(Lang:t("error.send_receiving"), 'error', 8000)
+                lib.notify({ title = 'Error', description = Lang:t("error.send_receiving"), type = 'error', duration = 7000 })
                 return
             end
 
