@@ -42,3 +42,4 @@ A bird to send post letter to anyone currently online
 - Faroeste-Roleplay (for the original frp_peagle)
 - RexShack / RexShack#3041 (for the original RSG Telegram)
 - MOVZX / Goghor#9453 (conversions, optimisations, additions, etc)
+- Sadicius (redesign and others)
