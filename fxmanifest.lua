@@ -5,27 +5,25 @@ game 'rdr3'
 description 'rsg-telegram'
 version '1.1.0'
 
-ui_page('html/ui.html')
-
-server_scripts {
-    '@oxmysql/lib/MySQL.lua',
-    'server/*.lua'
-}
-
 shared_scripts {
     '@ox_lib/init.lua',
     'config.lua',
     'shared/functions.lua',
-    '@rsg-core/shared/locale.lua',
-    'locales/en.lua',
-    'locales/*.lua'
+}
+
+server_scripts {
+    '@oxmysql/lib/MySQL.lua',
+    'server/*.lua',
 }
 
 client_scripts {
     'client/client.lua'
 }
 
+ui_page('html/ui.html')
+
 files {
+    'locales/*.json',
     'html/ui.html',
     'html/style.css',
     'html/script.js',
