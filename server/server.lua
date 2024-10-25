@@ -1,14 +1,16 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
 
+lib.locale()
+
 -- Make Bird Post as a Usable Item
-RSGCore.Functions.CreateUseableItem("birdpost", function(source)
-    TriggerClientEvent("rsg-telegram:client:WriteMessage", source)
+RSGCore.Functions.CreateUseableItem('birdpost', function(source)
+    TriggerClientEvent('rsg-telegram:client:WriteMessage', source)
 end)
 
 -- Delivery Success
-RegisterNetEvent("rsg-telegram:server:DeliverySuccess")
-AddEventHandler("rsg-telegram:server:DeliverySuccess", function(sID, tPName)
-    TriggerClientEvent('ox_lib:notify', sID, {title = 'Success', description = Lang:t('success.letter_delivered', {pName = tPName}), type = 'success', duration = 5000 })
+RegisterNetEvent('rsg-telegram:server:DeliverySuccess')
+AddEventHandler('rsg-telegram:server:DeliverySuccess', function(sID, tPName)
+    TriggerClientEvent('ox_lib:notify', sID, {title = locale("title_38"), description = locale('letter_delivered', {pName = tPName}), type = 'success', duration = 5000 })
 end)
 
 -- Add Message to the Database
@@ -21,23 +23,23 @@ AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, se
     -- local _tgtid = tonumber(tgtid)
     local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(tgtid)
     if targetPlayer == nil then
-        TriggerClientEvent('ox_lib:notify', src, {title = 'Error', description = Lang:t('error.player_unavailable'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('player_unavailable'), type = 'error', duration = 5000 })
         return
     end
 
     if not Config.AllowSendToSelf and Player.PlayerData.citizenid == tgtid then
-        TriggerClientEvent('ox_lib:notify', src, {title = 'Error', description = Lang:t('error.send_to_self'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('send_to_self'), type = 'error', duration = 5000 })
         return
     end
 
     local _citizenid = targetPlayer.PlayerData.citizenid
     local targetPlayerName = targetPlayer.PlayerData.charinfo.firstname..' '..targetPlayer.PlayerData.charinfo.lastname
     local cost = Config.CostPerLetter
-    local cashBalance = Player.PlayerData.money["cash"]
-    local sentDate = os.date("%x")
+    local cashBalance = Player.PlayerData.money['cash']
+    local sentDate = os.date('%x')
 
     if Config.ChargePlayer and cashBalance < cost then
-        TriggerClientEvent('ox_lib:notify', src, {title = 'Error', description = Lang:t('error.insufficient_balance'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('insufficient_balance'), type = 'error', duration = 5000 })
         return
     end
 
@@ -54,11 +56,11 @@ AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, se
     local src = source
     local Player = RSGCore.Functions.GetPlayer(src)
     local cost = Config.CostPerLetter
-    local cashBalance = Player.PlayerData.money["cash"]
-    local sentDate = os.date("%x")
+    local cashBalance = Player.PlayerData.money['cash']
+    local sentDate = os.date('%x')
 
     if Config.ChargePlayer and cashBalance < cost then
-        TriggerClientEvent('ox_lib:notify', src, {title = 'Error', description = Lang:t('error.insufficient_balance'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('insufficient_balance'), type = 'error', duration = 5000 })
         return
     end
 
@@ -72,7 +74,7 @@ AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, se
 
     exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`) VALUES (?, ?, ?, ?, ?, ?, ?);', {citizenid, tFullName, sender, sendername, subject, sentDate, message})
 
-    TriggerClientEvent('ox_lib:notify', src, {title = 'Success', description = Lang:t("success.letter_delivered", {pName = tFullName}), type = 'success', duration = 5000 })
+    TriggerClientEvent('ox_lib:notify', src, {title = locale("title_38"), description = locale("letter_delivered", {pName = tFullName}), type = 'success', duration = 5000 })
 
     if Config.ChargePlayer then
         Player.Functions.RemoveMoney('cash', cost, 'send telegram')
@@ -110,7 +112,7 @@ AddEventHandler('rsg-telegram:server:GetMessages', function(tid)
     })
 
     if result[1] == nil then
-        TriggerClientEvent('ox_lib:notify', src, {title = 'Error', description = Lang:t('error.no_message'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('no_message'), type = 'error', duration = 5000 })
         return
     end
 
@@ -122,7 +124,7 @@ AddEventHandler('rsg-telegram:server:GetMessages', function(tid)
     telegram['sentDate'] = result[1]['sentDate']
     telegram['message'] = result[1]['message']
 
-    MySQL.Async.execute("UPDATE `telegrams` SET `status` = 1, `birdstatus` = 1 WHERE id = @id",
+    MySQL.Async.execute('UPDATE `telegrams` SET `status` = 1, `birdstatus` = 1 WHERE id = @id',
     {
         ['@id'] = tid
     })
@@ -135,22 +137,22 @@ RegisterServerEvent('rsg-telegram:server:DeleteMessage')
 AddEventHandler('rsg-telegram:server:DeleteMessage', function(tid)
     local src = source
 
-    local result = MySQL.query.await("SELECT * FROM telegrams WHERE id = @id",
+    local result = MySQL.query.await('SELECT * FROM telegrams WHERE id = @id',
     {
         ['@id'] = tid
     })
 
     if result[1] == nil then
-        TriggerClientEvent('ox_lib:notify', src, {title = 'Error', description = Lang:t('error.delete_fail'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('delete_fail'), type = 'error', duration = 5000 })
         return
     end
 
-    MySQL.Async.execute("DELETE FROM telegrams WHERE id = @id",
+    MySQL.Async.execute('DELETE FROM telegrams WHERE id = @id',
     {
-        ["@id"] = tid
+        ['@id'] = tid
     })
 
-    TriggerClientEvent('ox_lib:notify', src, {title = 'Success', description = Lang:t('success.delete_success'), type = 'success', duration = 5000 })
+    TriggerClientEvent('ox_lib:notify', src, {title = locale("title_38"), description = locale('delete_success'), type = 'success', duration = 5000 })
     TriggerClientEvent('rsg-telegram:client:ReadMessages', src)
 end)
 
@@ -160,7 +162,7 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayers', function(sour
     local src = source
     local xPlayer = RSGCore.Functions.GetPlayer(src)
     exports.oxmysql:execute('SELECT * FROM `address_book` WHERE owner = @owner  ORDER BY name ASC', {
-        ["@owner"] = xPlayer.PlayerData.citizenid
+        ['@owner'] = xPlayer.PlayerData.citizenid
     }, function(result)
         if result[1] then
             cb(result)
@@ -174,7 +176,7 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayersPostOffice', fun
     local src = source
     local xPlayer = RSGCore.Functions.GetPlayer(src)
     exports.oxmysql:execute('SELECT * FROM `address_book` WHERE owner = @owner  ORDER BY name ASC', {
-        ["@owner"] = xPlayer.PlayerData.citizenid
+        ['@owner'] = xPlayer.PlayerData.citizenid
     }, function(result)
         if result[1] then
             cb(result)
@@ -190,7 +192,7 @@ AddEventHandler('rsg-telegram:server:SavePerson', function(name,cid)
     local xPlayer = RSGCore.Functions.GetPlayer(src)
     while xPlayer == nil do Wait(0) end
     exports.oxmysql:execute('INSERT INTO address_book (`citizenid`, `name`, `owner`) VALUES (?, ?, ?);', {cid, name, xPlayer.PlayerData.citizenid})
-    TriggerClientEvent('ox_lib:notify', src, {title = 'Success', description = 'New Person add Successfuly', type = 'success', duration = 5000 })
+    TriggerClientEvent('ox_lib:notify', src, {title = locale("title_38"), description = locale("title_40"), type = 'success', duration = 5000 })
 end)
 
 RegisterServerEvent('rsg-telegram:server:RemovePerson')
@@ -198,13 +200,13 @@ AddEventHandler('rsg-telegram:server:RemovePerson', function(cid)
     local src = source
     local xPlayer = RSGCore.Functions.GetPlayer(src)
     while xPlayer == nil do Wait(0) end
-    MySQL.Async.execute("DELETE FROM address_book WHERE owner like @owner AND citizenid like @citizenid",
+    MySQL.Async.execute('DELETE FROM address_book WHERE owner like @owner AND citizenid like @citizenid',
     {
-        ["@owner"] = xPlayer.PlayerData.citizenid,
+        ['@owner'] = xPlayer.PlayerData.citizenid,
         ['citizenid'] = cid
     })
 
-    TriggerClientEvent('ox_lib:notify', src, {title = 'Success', description = Lang:t('success.delete_success'), type = 'success', duration = 5000 })
+    TriggerClientEvent('ox_lib:notify', src, {title = locale("title_38"), description = locale('delete_success'), type = 'success', duration = 5000 })
 end)
 
 
