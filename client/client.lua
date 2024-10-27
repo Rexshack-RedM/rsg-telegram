@@ -30,7 +30,7 @@ local BirdPrompt = function()
     Citizen.CreateThread(function()
         birdPrompt = Citizen.InvokeNative(0x04F97DE45A519419)
         PromptSetControlAction(birdPrompt, RSGCore.Shared.Keybinds['ENTER'])
-        local str = CreateVarString(10, 'LITERAL_STRING', locale("prompt_button"))
+        local str = CreateVarString(10, 'LITERAL_STRING', locale("cl_prompt_button"))
         PromptSetText(birdPrompt, str)
         PromptSetEnabled(birdPrompt, true)
         PromptSetVisible(birdPrompt, true)
@@ -45,7 +45,7 @@ Citizen.CreateThread(function()
     for i = 1, #Config.PostOfficeLocations do
         local pos = Config.PostOfficeLocations[i]
 
-        exports['rsg-core']:createPrompt(pos.location, pos.coords, RSGCore.Shared.Keybinds['J'], locale("prompt") .. pos.name, {
+        exports['rsg-core']:createPrompt(pos.location, pos.coords, RSGCore.Shared.Keybinds['J'], locale("cl_prompt") ..' '.. pos.name, {
             type = 'client',
             event = 'rsg-telegram:client:TelegramMenu'
         })
@@ -65,30 +65,30 @@ end)
 RegisterNetEvent('rsg-telegram:client:TelegramMenu', function()
     local MenuTelegram = {
         {
-            title = locale("title_01"),
+            title = locale("cl_title_01"),
             icon = "fa-solid fa-book",
-            description = locale("title_02"),
+            description = locale("cl_title_02"),
             event = "rsg-telegram:client:OpenAddressbook",
             args = {}
         },
         {
-            title = locale("title_03"),
+            title = locale("cl_title_03"),
             icon = "fa-solid fa-file-contract",
-            description = locale("title_04"),
+            description = locale("cl_title_04"),
             event = "rsg-telegram:client:ReadMessages",
             args = {}
         },
         {
-            title = locale("title_05"),
+            title = locale("cl_title_05"),
             icon = "fa-solid fa-pen-to-square",
-            description = locale("title_06"),
+            description = locale("cl_title_06"),
             event = "rsg-telegram:client:WriteMessagePostOffice",
             args = {}
         },
     }
     lib.registerContext({
         id = "telegram_menu",
-        title = locale("title_07"),
+        title = locale("cl_title_07"),
         options = MenuTelegram
     })
     lib.showContext("telegram_menu")
@@ -108,16 +108,16 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
                 option[#option + 1] = content
             end
 
-            local sendButton = locale("send_button_free")
+            local sendButton = locale("cl_send_button_free")
 
             if Config.ChargePlayer then
-                sendButton = locale("send_button_paid", {lPrice = tonumber(Config.CostPerLetter)})
+                sendButton = locale("cl_send_button_paid", {lPrice = tonumber(Config.CostPerLetter)})
             end
 
-            local input = lib.inputDialog(locale('send_message_header'), {
+            local input = lib.inputDialog(locale('cl_send_message_header'), {
                 { type = 'select', options = option, required = true, default = 'Recipient' },
-                { type = 'input', label = locale("title_08"), required = true },
-                { type = 'textarea', label = locale("title_09"), required = true, autosize = true },
+                { type = 'input', label = locale("cl_title_08"), required = true },
+                { type = 'textarea', label = locale("cl_title_09"), required = true, autosize = true },
             })
             if not input then return end
 
@@ -128,7 +128,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
             if recipient and subject and message then
                 local alert = lib.alertDialog({
                     header = sendButton,
-                    content = locale("title_10"),
+                    content = locale("cl_title_10"),
                     centered = true,
                     cancel = true
                 })
@@ -143,7 +143,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
                 end
             end
         else
-            lib.notify({ title = locale("title_11"), description = locale("title_12"), type = 'error', duration = 7000 })
+            lib.notify({ title = locale("cl_title_11"), description = locale("cl_title_12"), type = 'error', duration = 7000 })
 
         end
     end)
@@ -156,7 +156,7 @@ local function Prompts()
     local ped = PlayerPedId()
 
     if destination < 3 and IsPedOnMount(ped) or IsPedOnVehicle(ped) then
-        lib.notify({ title = locale("title_11"), description = locale('player_on_horse'), type = 'error', duration = 7000 })
+        lib.notify({ title = locale("title_11"), description = locale('cl_player_on_horse'), type = 'error', duration = 7000 })
 
         Wait(3000)
         return
@@ -294,7 +294,7 @@ local SpawnBirdPost = function(posX, posY, posZ, heading, rfar, x)
     Wait(2000)
 
     if x == 0 then
-        local blipname = locale("blip_name")
+        local blipname = locale("cl_blip_name")
         local bliphash = -1749618580
 
         Debug("bliphash", bliphash)
@@ -316,7 +316,7 @@ CreateThread(function()
         Wait(1)
 
         if notified and destination < 3 then
-            local Bird = CreateVarString(10, "LITERAL_STRING", "~pa~".. locale("prompt_desc") .."~q~")
+            local Bird = CreateVarString(10, "LITERAL_STRING", locale("prompt_desc"))
             PromptSetActiveGroupThisFrame(letterPromptGroup, Bird)
 
             if PromptHasHoldModeCompleted(birdPrompt) then
@@ -349,7 +349,7 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
 
         if insideBuilding ~= 0 then
             if not buildingNotified then
-                lib.notify({ title = locale("title_11"), description = locale('inside_building'), type = 'error', duration = 7000 })
+                lib.notify({ title = locale("cl_title_11"), description = locale('cl_inside_building'), type = 'error', duration = 7000 })
                 buildingNotified = true
             end
 
@@ -367,9 +367,9 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
 
         if destination < 100 and not notified then
             notified = true
-            lib.notify({ title = locale("title_13"), description = locale('bird_approaching'), type = 'info', duration = 7000 })
+            lib.notify({ title = locale("cl_title_13"), description = locale('cl_bird_approaching'), type = 'info', duration = 7000 })
             Wait(5000)
-            lib.notify({ title = locale("title_13"), description = locale('wait_for_bird'), type = 'info', duration = 7000 })
+            lib.notify({ title = locale("cl_title_13"), description = locale('cl_wait_for_bird'), type = 'info', duration = 7000 })
         end
 
         local IsPedAir = IsEntityInAir(cuteBird, 1)
@@ -403,11 +403,11 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
         end
 
         if birdTime == 0 and cuteBird ~= nil and notified then
-            lib.notify({ title = locale("title_11"), description = locale('delivery_fail1'), type = 'error', duration = 7000 })
+            lib.notify({ title = locale("cl_title_11"), description = locale('cl_delivery_fail1'), type = 'error', duration = 7000 })
             Wait(8000)
-            lib.notify({ title = locale("title_11"), description = locale('delivery_fail2'), type = 'error', duration = 7000 })
+            lib.notify({ title = locale("cl_title_11"), description = locale('cl_delivery_fail2'), type = 'error', duration = 7000 })
             Wait(8000)
-            lib.notify({ title = locale("title_11"), description = locale('delivery_fail3'), type = 'error', duration = 7000 })
+            lib.notify({ title = locale("cl_title_11"), description = locale('cl_delivery_fail3'), type = 'error', duration = 7000 })
 
             SetEntityInvincible(cuteBird, false)
             SetEntityAsMissionEntity(cuteBird, false, false)
@@ -435,7 +435,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             local option = {}
 
             if isReceiving then
-                lib.notify({ title = locale("title_11"), description = locale('send_receiving'), type = 'error', duration = 7000 })
+                lib.notify({ title = locale("cl_title_11"), description = locale('cl_send_receiving'), type = 'error', duration = 7000 })
                 return
             end
 
@@ -444,7 +444,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             senderID = GetPlayerServerId(pID)
 
             if IsPedOnMount(ped) or IsPedOnVehicle(ped) then
-                lib.notify({ title = locale("title_11"), description = locale('player_on_horse'), type = 'error', duration = 7000 })
+                lib.notify({ title = locale("cl_title_11"), description = locale('cl_player_on_horse'), type = 'error', duration = 7000 })
                 return
             end
 
@@ -465,7 +465,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             SpawnBirdPost(playerCoords.x, playerCoords.y - rFar, playerCoords.z, heading, rFar)
 
             if cuteBird == nil then
-                lib.notify({ title = locale("title_11"), description = locale("title_14"), type = 'error', duration = 7000 })
+                lib.notify({ title = locale("cl_title_11"), description = locale("cl_title_14"), type = 'error', duration = 7000 })
                 return
             end
 
@@ -483,10 +483,10 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                 end
             end
 
-            local sendButton = locale("send_button_free")
+            local sendButton = locale("cl_send_button_free")
 
             if Config.ChargePlayer then
-                sendButton = locale("send_button_paid", {lPrice = tonumber(Config.CostPerLetter)})
+                sendButton = locale("cl_send_button_paid", {lPrice = tonumber(Config.CostPerLetter)})
             end
 
             for i = 1, #players do
@@ -499,10 +499,10 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                 option[#option + 1] = content
             end
 
-            local input = lib.inputDialog(locale('send_message_header'), {
+            local input = lib.inputDialog(locale('cl_send_message_header'), {
                 { type = 'select', options = option, required = true, default = 'Recipient' },
-                {type = 'input', label = locale("title_08"), required = true},
-                {type = 'input', label = locale("title_09"), required = true},
+                {type = 'input', label = locale("cl_title_08"), required = true},
+                {type = 'input', label = locale("cl_title_09"), required = true},
             })
 
             if not input then
@@ -521,7 +521,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                     RemoveBlip(birdBlip)
                 end
 
-                lib.notify({ title = locale("title_11"), description = locale('cancel_send'), type = 'error', duration = 7000 })
+                lib.notify({ title = locale("cl_title_11"), description = locale('cl_cancel_send'), type = 'error', duration = 7000 })
 
                 return
             end
@@ -532,7 +532,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             if recipient and subject and message then
                 local alert = lib.alertDialog({
                     header = sendButton,
-                    content = locale("title_10"),
+                    content = locale("cl_title_10"),
                     centered = true,
                     cancel = true
                 })
@@ -573,13 +573,13 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                     DeleteEntity(cuteBird)
                     RemoveBlip(birdBlip)
 
-                    TriggerServerEvent('rsg-telegram:server:SendMessage', senderID, sendertelegram, senderfullname, recipient, locale('message_prefix')..': '..subject, message)
+                    TriggerServerEvent('rsg-telegram:server:SendMessage', senderID, sendertelegram, senderfullname, recipient, locale('cl_message_prefix')..': '..subject, message)
                 else
-                    lib.notify({ title = locale("title_15"), description = locale("title_16"),'', type = 'error' })
+                    lib.notify({ title = locale("cl_title_15"), description = locale("cl_title_16"),'', type = 'error' })
                 end
             end
         else
-            lib.notify({ title = locale("title_15"), description = locale("title_16"), type = 'error' })
+            lib.notify({ title = locale("cl_title_15"), description = locale("cl_title_16"), type = 'error' })
         end
     end)
 end)
@@ -697,12 +697,12 @@ end)
 RegisterNetEvent('rsg-telegram:client:OpenAddressbook', function()
     lib.registerContext({
         id = 'addressbook_menu',
-        title = locale("title_17"),
+        title = locale("cl_title_17"),
         position = 'top-right',
         options = {
             {
-                title = locale("title_18"),
-                description = locale("title_19"),
+                title = locale("cl_title_18"),
+                description = locale("cl_title_19"),
                 icon = 'fa-solid fa-book',
                 event = 'rsg-telegram:client:ViewAddressBook',
                 args = {
@@ -710,8 +710,8 @@ RegisterNetEvent('rsg-telegram:client:OpenAddressbook', function()
                 }
             },
             {
-                title = locale("title_20"),
-                description = locale("title_21"),
+                title = locale("cl_title_20"),
+                description = locale("cl_title_21"),
                 icon = 'fa-solid fa-book',
                 iconColor = 'green',
                 event = 'rsg-telegram:client:AddPersonMenu',
@@ -720,8 +720,8 @@ RegisterNetEvent('rsg-telegram:client:OpenAddressbook', function()
                 }
             },
             {
-                title = locale("title_22"),
-                description = locale("title_23"),
+                title = locale("cl_title_22"),
+                description = locale("cl_title_23"),
                 icon = 'fa-solid fa-book',
                 iconColor = 'red',
                 event = 'rsg-telegram:client:RemovePersonMenu',
@@ -736,9 +736,9 @@ end)
 
 
 RegisterNetEvent('rsg-telegram:client:AddPersonMenu', function()
-    local input = lib.inputDialog(locale("title_24"), {
-        { type = 'input', label = locale("title_25"),      required = true },
-        { type = 'input', label = locale("title_26"), required = true },
+    local input = lib.inputDialog(locale("cl_title_24"), {
+        { type = 'input', label = locale("cl_title_25"),      required = true },
+        { type = 'input', label = locale("cl_title_26"), required = true },
     })
     if not input then return end
 
@@ -754,8 +754,8 @@ RegisterNetEvent('rsg-telegram:client:ViewAddressBook', function()
         if players ~= nil then
             local options = {
                 {
-                    title = locale("title_27"),
-                    description = locale("title_28"),
+                    title = locale("cl_title_27"),
+                    description = locale("cl_title_28"),
                     icon = 'fa-solid fa-envelope-open-text',
                     isMenuHeader = true,
                 },
@@ -764,13 +764,13 @@ RegisterNetEvent('rsg-telegram:client:ViewAddressBook', function()
                 local player = players[i]
                 options[#options + 1] = {
                     title = player.name,
-                    description = locale("title_29") .. player.citizenid,
+                    description = locale("cl_title_29") .. player.citizenid,
                     disabled = true
                 }
             end
             options[#options + 1] = {
-                title = locale("title_30"),
-                description = locale("title_31"),
+                title = locale("cl_title_30"),
+                description = locale("cl_title_31"),
                 icon = 'fa-solid fa-circle-xmark',
                 event = 'rsg-telegram:client:OpenAddressbook',
                 args = {
@@ -779,13 +779,13 @@ RegisterNetEvent('rsg-telegram:client:ViewAddressBook', function()
             }
             lib.registerContext({
                 id = 'addressbook_view',  -- Corrected the context ID here
-                title = locale("title_32"),
+                title = locale("cl_title_32"),
                 position = 'top-right',
                 options = options
             })
             lib.showContext('addressbook_view')  -- Use the correct context ID here
         else
-            lib.notify({ title = locale("title_33"), description = locale("title_34"), type = 'error', duration = 7000 })
+            lib.notify({ title = locale("cl_title_33"), description = locale("cl_title_34"), type = 'error', duration = 7000 })
         end
     end)
 end)
@@ -801,7 +801,7 @@ RegisterNetEvent('rsg-telegram:client:RemovePersonMenu', function()
                 option[#option + 1] = content
             end
 
-            local input = lib.inputDialog(locale("title_35"), {
+            local input = lib.inputDialog(locale("cl_title_35"), {
                 { type = 'select', options = option, required = true, default = 'Recipient' }
             })
             if not input then return end
@@ -811,7 +811,7 @@ RegisterNetEvent('rsg-telegram:client:RemovePersonMenu', function()
                 TriggerServerEvent('rsg-telegram:server:RemovePerson', citizenid)
             end
         else
-            lib.notify({ title = locale("title_36"), description = locale("title_37"), type = 'error', duration = 7000 })
+            lib.notify({ title = locale("cl_title_36"), description = locale("cl_title_37"), type = 'error', duration = 7000 })
         end
     end)
 end)

@@ -10,7 +10,7 @@ end)
 -- Delivery Success
 RegisterNetEvent('rsg-telegram:server:DeliverySuccess')
 AddEventHandler('rsg-telegram:server:DeliverySuccess', function(sID, tPName)
-    TriggerClientEvent('ox_lib:notify', sID, {title = locale("title_38"), description = locale('letter_delivered', {pName = tPName}), type = 'success', duration = 5000 })
+    TriggerClientEvent('ox_lib:notify', sID, {title = locale("sv_title_38"), description = locale('sv_letter_delivered', {pName = tPName}), type = 'success', duration = 5000 })
 end)
 
 -- Add Message to the Database
@@ -23,12 +23,12 @@ AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, se
     -- local _tgtid = tonumber(tgtid)
     local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(tgtid)
     if targetPlayer == nil then
-        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('player_unavailable'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_player_unavailable'), type = 'error', duration = 5000 })
         return
     end
 
     if not Config.AllowSendToSelf and Player.PlayerData.citizenid == tgtid then
-        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('send_to_self'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_send_to_self'), type = 'error', duration = 5000 })
         return
     end
 
@@ -39,7 +39,7 @@ AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, se
     local sentDate = os.date('%x')
 
     if Config.ChargePlayer and cashBalance < cost then
-        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('insufficient_balance'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_insufficient_balance'), type = 'error', duration = 5000 })
         return
     end
 
@@ -60,7 +60,7 @@ AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, se
     local sentDate = os.date('%x')
 
     if Config.ChargePlayer and cashBalance < cost then
-        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('insufficient_balance'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_insufficient_balance'), type = 'error', duration = 5000 })
         return
     end
 
@@ -74,7 +74,7 @@ AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, se
 
     exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`) VALUES (?, ?, ?, ?, ?, ?, ?);', {citizenid, tFullName, sender, sendername, subject, sentDate, message})
 
-    TriggerClientEvent('ox_lib:notify', src, {title = locale("title_38"), description = locale("letter_delivered", {pName = tFullName}), type = 'success', duration = 5000 })
+    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale("sv_letter_delivered", {pName = tFullName}), type = 'success', duration = 5000 })
 
     if Config.ChargePlayer then
         Player.Functions.RemoveMoney('cash', cost, 'send telegram')
@@ -112,7 +112,7 @@ AddEventHandler('rsg-telegram:server:GetMessages', function(tid)
     })
 
     if result[1] == nil then
-        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('no_message'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_no_message'), type = 'error', duration = 5000 })
         return
     end
 
@@ -143,7 +143,7 @@ AddEventHandler('rsg-telegram:server:DeleteMessage', function(tid)
     })
 
     if result[1] == nil then
-        TriggerClientEvent('ox_lib:notify', src, {title = locale("title_39"), description = locale('delete_fail'), type = 'error', duration = 5000 })
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_delete_fail'), type = 'error', duration = 5000 })
         return
     end
 
@@ -152,7 +152,7 @@ AddEventHandler('rsg-telegram:server:DeleteMessage', function(tid)
         ['@id'] = tid
     })
 
-    TriggerClientEvent('ox_lib:notify', src, {title = locale("title_38"), description = locale('delete_success'), type = 'success', duration = 5000 })
+    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale('sv_delete_success'), type = 'success', duration = 5000 })
     TriggerClientEvent('rsg-telegram:client:ReadMessages', src)
 end)
 
@@ -192,7 +192,7 @@ AddEventHandler('rsg-telegram:server:SavePerson', function(name,cid)
     local xPlayer = RSGCore.Functions.GetPlayer(src)
     while xPlayer == nil do Wait(0) end
     exports.oxmysql:execute('INSERT INTO address_book (`citizenid`, `name`, `owner`) VALUES (?, ?, ?);', {cid, name, xPlayer.PlayerData.citizenid})
-    TriggerClientEvent('ox_lib:notify', src, {title = locale("title_38"), description = locale("title_40"), type = 'success', duration = 5000 })
+    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale("sv_title_40"), type = 'success', duration = 5000 })
 end)
 
 RegisterServerEvent('rsg-telegram:server:RemovePerson')
@@ -206,12 +206,11 @@ AddEventHandler('rsg-telegram:server:RemovePerson', function(cid)
         ['citizenid'] = cid
     })
 
-    TriggerClientEvent('ox_lib:notify', src, {title = locale("title_38"), description = locale('delete_success'), type = 'success', duration = 5000 })
+    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale('sv_delete_success'), type = 'success', duration = 5000 })
 end)
 
-
 -- Command
-RSGCore.Commands.Add('addressbook', 'Your Personal Addressbook', {}, false, function(source)
+RSGCore.Commands.Add('addressbook', locale("sv_command"), {}, false, function(source)
     local src = source
     TriggerClientEvent('rsg-telegram:client:OpenAddressbook', src)
 end)
