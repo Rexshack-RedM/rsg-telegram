@@ -316,7 +316,7 @@ CreateThread(function()
         Wait(1)
 
         if notified and destination < 3 then
-            local Bird = CreateVarString(10, "LITERAL_STRING", locale("prompt_desc"))
+            local Bird = CreateVarString(10, "LITERAL_STRING", locale("cl_prompt_desc"))
             PromptSetActiveGroupThisFrame(letterPromptGroup, Bird)
 
             if PromptHasHoldModeCompleted(birdPrompt) then
