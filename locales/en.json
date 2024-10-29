@@ -41,7 +41,7 @@
     "cl_prompt_button": "Retrieve Letter",
     "cl_blip_name": "Bird Post",
     "cl_send_button_free": "Send Letter",
-    "cl_send_button_paid": "Send Letter for $%{lPrice}",
+    "cl_send_button_paid": "Send Letter for",
     "cl_send_message_header": "Send a Letter",
     "cl_bird_approaching": "There's a Bird Post approaching to You!",
     "cl_wait_for_bird": "Please wait for the Bird Post to approaches You!",
@@ -62,10 +62,12 @@
     "sv_insufficient_balance": "You don't have enough cash!",
     "sv_no_message": "No messages available for you!",
     "sv_delete_fail": "Failed to delete the message!",
-    "sv_letter_delivered": "Letter sent to %{pName} successfully!",
+    "sv_letter_delivered": "Letter sent to",
+    "sv_letter_delivered_suc": "successfully!",
     "sv_delete_success": "Message deleted successfully!",
     "sv_command" : "Your Personal Addressbook",
 
     "message": "Write your message here!",
-    "wait_between_send": "Please wait %{tDelay} seconds before sending another letter!"
+    "wait_between_send": "Please wait"
+    "wait_between_send_suc": "seconds before sending another letter!"
 }
