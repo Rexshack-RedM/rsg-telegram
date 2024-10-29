@@ -41,7 +41,7 @@
     "cl_prompt_button": "Recuperar carta",
     "cl_blip_name": "Bird Post",
     "cl_send_button_free": "Enviar carta",
-    "cl_send_button_paid": "Enviar carta por $%{lPrice}",
+    "cl_send_button_paid": "Enviar carta para",
     "cl_send_message_header": "Enviar una carta",
     "cl_bird_approaching": "¡Hay un Bird Post acercándose a usted!",
     "cl_wait_for_bird": "¡Por favor, espere a que el Bird Post se acerque a usted!",
@@ -62,10 +62,12 @@
     "sv_insufficient_balance": "¡No tienes suficiente efectivo!",
     "sv_no_message": "¡No hay mensajes disponibles para ti!",
     "sv_delete_fail": "¡Error al eliminar el mensaje!",
-    "sv_letter_delivered": "¡Carta enviada a %{pName} con éxito!",
+    "sv_letter_delivered": "Carta enviada a",
+    "sv_letter_delivered_suc": "¡con éxito!",
     "sv_delete_success": "¡Mensaje eliminado con éxito!",
     "sv_command": "Tu libreta de direcciones personal",
-    
+
     "message": "¡Escribe tu mensaje aquí!",
-    "wait_between_send": "¡Espera %{tDelay} segundos antes de enviar otra carta!"
+    "wait_between_send": "Por favor, espere",
+    "wait_between_send_suc": "¡segundos antes de enviar otra carta!"
 }
