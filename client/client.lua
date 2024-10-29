@@ -111,7 +111,8 @@ RegisterNetEvent('rsg-telegram:client:WriteMessagePostOffice', function()
             local sendButton = locale("cl_send_button_free")
 
             if Config.ChargePlayer then
-                sendButton = locale("cl_send_button_paid", {lPrice = tonumber(Config.CostPerLetter)})
+                local lPrice = tonumber(Config.CostPerLetter)
+                sendButton = locale('cl_send_button_paid') ..' $ %{lPrice}'
             end
 
             local input = lib.inputDialog(locale('cl_send_message_header'), {
