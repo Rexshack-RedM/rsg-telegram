@@ -10,7 +10,7 @@ end)
 -- Delivery Success
 RegisterNetEvent('rsg-telegram:server:DeliverySuccess')
 AddEventHandler('rsg-telegram:server:DeliverySuccess', function(sID, tPName)
-    TriggerClientEvent('ox_lib:notify', sID, {title = locale("sv_title_38"), description = locale('sv_letter_delivered', {pName = tPName}), type = 'success', duration = 5000 })
+    TriggerClientEvent('ox_lib:notify', sID, {title = locale("sv_title_38"), description = locale('sv_letter_delivered')..' '..tPName..' '..locale('sv_letter_delivered_suc'), type = 'success', duration = 5000 })
 end)
 
 -- Add Message to the Database
