@@ -68,6 +68,6 @@
     "sv_command" : "Your Personal Addressbook",
 
     "message": "Write your message here!",
-    "wait_between_send": "Please wait"
+    "wait_between_send": "Please wait",
     "wait_between_send_suc": "seconds before sending another letter!"
 }
