@@ -68,6 +68,6 @@
     "sv_command": "Votre carnet d'adresses personnel",
     
     "message": "Écrivez votre message ici !",
-    "wait_between_send": "Veuillez patienter"
+    "wait_between_send": "Veuillez patienter",
     "wait_between_send_suc": "secondes avant d'envoyer une autre lettre!"
 }
