@@ -169,45 +169,12 @@ $(document).ready(function() {
     });
 });
 
-$(document).ready(function() {
-    const searchOptions = [
-        'Sender 1',
-        'Subject 2',
-        'Date: 01/01/2024',
-        'Sender 3',
-        'Subject 4',
-        // Agrega más opciones de búsqueda según lo necesario
-    ];
-
-    $('#searchInput').on('input', function() {
-        const searchTerm = $(this).val().toLowerCase();
-        const filteredOptions = searchOptions.filter(option =>
-            option.toLowerCase().includes(searchTerm)
-        );
-
-        $('#searchOptions').empty(); // Limpia las opciones anteriores
-
-        if (filteredOptions.length > 0) {
-            filteredOptions.forEach(option => {
-                $('#searchOptions').append(`<div class="search-option">${option}</div>`);
-            });
-            $('#searchOptions').show();
-        } else {
-            $('#searchOptions').hide(); // Oculta si no hay resultados
-        }
-    });
-
-    // Ocultar las opciones si se hace clic fuera del input
-    $(document).on('click', function(event) {
-        if (!$(event.target).closest('#searchInput, #searchOptions').length) {
-            $('#searchOptions').hide();
-        }
-    });
-
-    // Manejo de la selección de una opción
-    $('#searchOptions').on('click', '.search-option', function() {
-        $('#searchInput').val($(this).text());
-        $('#searchOptions').hide();
+$(document).ready(function () {
+    $("#searchInput").on("keyup", function () {
+        var value = $(this).val().toLowerCase();
+        $("#inboxList li").filter(function () {
+            $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+        });
     });
 });
 
