@@ -169,7 +169,14 @@ $(document).ready(function() {
     });
 });
 
-
+$(document).ready(function () {
+    $("#searchInput").on("keyup", function () {
+        var value = $(this).val().toLowerCase();
+        $("#inboxList li").filter(function () {
+            $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+        });
+    });
+});
 
 $(document).ready(function() {
     // search + mark Read select + delete select
