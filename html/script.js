@@ -78,6 +78,15 @@ $(function ()
     });
 });
 
+// Listen for the 'Esc' key press to close ui
+$(document).ready(function () {
+    $(document).keydown(function (event) {
+        if (event.keyCode === 27) {
+            $.post('https://rsg-telegram/NUIFocusOff', JSON.stringify({}));
+        }
+    });
+});
+
 // clicks
 $(document).ready(function() {
     $("#inboxList").on("click", 'li', function(event) {
