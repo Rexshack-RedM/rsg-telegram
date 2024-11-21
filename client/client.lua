@@ -335,47 +335,132 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
     tPName = StPName
     local ped = PlayerPedId()
     local rFar = math.random(50, 100)
+    buildingNotified = false
+    notified = false
+    isBirdAlreadySpawned = false
+    birdTime = Config.BirdDeliveryTimeout or 300
 
     while isReceiving do
         Wait(1)
-
         playerCoords = GetEntityCoords(ped)
-        local birdCoords = GetEntityCoords(cuteBird)
         local myCoords = vector3(playerCoords.x, playerCoords.y, playerCoords.z)
-        destination = #(birdCoords - myCoords)
-
         local insideBuilding = GetInteriorFromEntity(ped)
-
         isBirdCanSpawn = true
 
+        -- Check if player is inside building
         if insideBuilding ~= 0 then
             if not buildingNotified then
                 lib.notify({ title = locale("cl_title_11"), description = locale('cl_inside_building'), type = 'error', duration = 7000 })
                 buildingNotified = true
             end
-
             isBirdCanSpawn = false
-
             goto continue
         end
 
+        -- Initial bird spawn
         if isBirdCanSpawn and not isBirdAlreadySpawned then
             SpawnBirdPost(playerCoords.x - 100, playerCoords.y - 100, playerCoords.z + 100, 92.0, rFar, 0)
-            TaskFlyToCoord(cuteBird, 0, playerCoords.x - 1, playerCoords.y - 1, playerCoords.z, 1, 0)
-            isBirdCanSpawn = false
-            isBirdAlreadySpawned = true
+            if cuteBird then
+                TaskFlyToCoord(cuteBird, 0, playerCoords.x, playerCoords.y, playerCoords.z + 0.8, 1, 0) -- Make bird fly closer to the player
+                isBirdCanSpawn = false
+                isBirdAlreadySpawned = true
+            end
         end
 
-        if destination < 100 and not notified then
-            notified = true
-            lib.notify({ title = locale("cl_title_13"), description = locale('cl_bird_approaching'), type = 'info', duration = 7000 })
-            Wait(5000)
-            lib.notify({ title = locale("cl_title_13"), description = locale('cl_wait_for_bird'), type = 'info', duration = 7000 })
+        if cuteBird then
+            local birdCoords = GetEntityCoords(cuteBird)
+            destination = #(birdCoords - myCoords)
+
+            -- Notify player of approaching bird
+            if destination < 100 and not notified then
+                notified = true
+                lib.notify({ title = locale("cl_title_13"), description = locale('cl_bird_approaching'), type = 'info', duration = 7000 })
+                Wait(5000)
+                lib.notify({ title = locale("cl_title_13"), description = locale('cl_wait_for_bird'), type = 'info', duration = 7000 })
+            end
+
+            -- Freeze the player as the bird approaches (within 10 meters)
+            if destination <= 10 and not freezedPlayer then
+                FreezeEntityPosition(ped, true)  -- Freeze player
+                SetEntityInvincible(ped, true)  -- Make player invincible
+                freezedPlayer = true
+            end
+
+            -- Bird landing and message delivery logic
+            if destination <= 2.5 then
+                -- Prepare player for message
+                ClearPedTasks(ped)
+                ClearPedSecondaryTask(ped)
+                FreezeEntityPosition(ped, false)  -- Keep player frozen
+                SetEntityInvincible(ped, true)
+                TaskStartScenarioInPlace(ped, GetHashKey('WORLD_HUMAN_WRITE_NOTEBOOK'), -1, true, false, false, false)
+				SetEntityCollision(cuteBird, false, false)
+                -- Attach bird to player once it's close enough
+                local AttachConfig = Config.BirdAttach["A_C_Hawk_01"]
+                local Attach = IsPedMale(PlayerPedId()) and AttachConfig.Male or AttachConfig.Female
+
+                AttachEntityToEntity(
+                    cuteBird,
+                    PlayerPedId(),
+                    Attach[1], -- Bone Index
+                    Attach[2], -- xOffset
+                    Attach[3], -- yOffset
+                    Attach[4], -- zOffset
+                    Attach[5], -- xRot
+                    Attach[6], -- yRot
+                    Attach[7], -- zRot
+                    false, false, true, false, 0, true, false, false
+                )
+
+                -- Freeze bird in place and clear its tasks
+                FreezeEntityPosition(cuteBird, true)
+                ClearPedTasksImmediately(cuteBird)
+                SetBlockingOfNonTemporaryEvents(cuteBird, true)
+
+                -- Wait for message delivery to complete
+                --Wait(10000)  -- Allow time for the player to read the message (optional)
+
+                -- Detach and prepare bird for departure
+                DetachEntity(cuteBird, true, true)
+                SetEntityCollision(cuteBird, false, false)
+                FreezeEntityPosition(cuteBird, false)
+                SetEntityInvincible(cuteBird, false)
+
+                Wait(100)
+
+                -- Make bird fly away
+                local coordsOffset = math.random(200, 300)
+                TaskFlyToCoord(cuteBird, 0, playerCoords.x - coordsOffset, playerCoords.y - coordsOffset, playerCoords.z + 75, 1, 0)
+
+                Wait(Config.BirdArrivalDelay)
+
+                -- Cleanup bird
+                SetEntityInvincible(cuteBird, false)
+                SetEntityCanBeDamaged(cuteBird, true)
+                SetEntityAsMissionEntity(cuteBird, false, false)
+                SetEntityAsNoLongerNeeded(cuteBird)
+                DeleteEntity(cuteBird)
+
+                if birdBlip ~= nil then
+                    RemoveBlip(birdBlip)
+                end
+
+                -- Reset player state
+                FreezeEntityPosition(ped, false)
+                SetEntityInvincible(ped, false)
+                ClearPedTasks(ped)
+                ClearPedSecondaryTask(ped)
+
+                -- Trigger server event and end receiving state
+                TriggerServerEvent('rsg-telegram:server:ReadMessage', sID)
+                isReceiving = false
+                return
+            end
         end
 
+        -- Handle bird movement and resurrection
         local IsPedAir = IsEntityInAir(cuteBird, 1)
-        local isBirdDead = Citizen.InvokeNative(0x7D5B1F88E7504BBA, cuteBird) -- IsEntityDead
-
+        local isBirdDead = Citizen.InvokeNative(0x7D5B1F88E7504BBA, cuteBird)
         BirdCoords = GetEntityCoords(cuteBird)
 
         Debug("cuteBird", cuteBird)
@@ -386,18 +471,16 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
         if cuteBird ~= nil and not IsPedAir and notified and destination > 3 then
             if Config.AutoResurrect and isBirdDead then
                 Debug("isBirdDead", isBirdDead)
-
                 ClearPedTasksImmediately(cuteBird)
-
                 SetEntityCoords(cuteBird, BirdCoords.x, BirdCoords.y, BirdCoords.z)
                 Wait(1000)
                 Citizen.InvokeNative(0x71BC8E838B9C6035, cuteBird) -- ResurrectPed
                 Wait(1000)
             end
-
             TaskFlyToCoord(cuteBird, 0, myCoords.x - 1, myCoords.y - 1, myCoords.z, 1, 0)
         end
 
+        -- Handle delivery timeout
         if birdTime > 0 then
             birdTime = birdTime - 1
             Wait(1000)
@@ -409,22 +492,22 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
             lib.notify({ title = locale("cl_title_11"), description = locale('cl_delivery_fail2'), type = 'error', duration = 7000 })
             Wait(8000)
             lib.notify({ title = locale("cl_title_11"), description = locale('cl_delivery_fail3'), type = 'error', duration = 7000 })
-
             SetEntityInvincible(cuteBird, false)
             SetEntityAsMissionEntity(cuteBird, false, false)
             SetEntityAsNoLongerNeeded(cuteBird)
             DeleteEntity(cuteBird)
             RemoveBlip(birdBlip)
-
             notified = false
             isReceiving = false
-
             return
         end
 
         ::continue::
     end
 end)
+
+
+
 
 -- Write the Message
 RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
@@ -441,7 +524,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             end
 
             local ped = PlayerPedId()
-            local pID =  PlayerId()
+            local pID = PlayerId()
             senderID = GetPlayerServerId(pID)
 
             if IsPedOnMount(ped) or IsPedOnVehicle(ped) then
@@ -464,13 +547,16 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             TaskWhistleAnim(ped, GetHashKey('WHISTLEHORSELONG'))
 
             SpawnBirdPost(playerCoords.x, playerCoords.y - rFar, playerCoords.z, heading, rFar)
+			SetEntityCollision(cuteBird, false, false)
 
             if cuteBird == nil then
                 lib.notify({ title = locale("cl_title_11"), description = locale("cl_title_14"), type = 'error', duration = 7000 })
                 return
             end
 
+            -- Task the bird to fly to the player
             TaskFlyToCoord(cuteBird, 1, playerCoords.x, playerCoords.y, playerCoords.z, 1, 1)
+			SetEntityCollision(cuteBird, false, false)
             TaskStartScenarioInPlace(ped, GetHashKey('WORLD_HUMAN_WRITE_NOTEBOOK'), -1, true, false, false, false)
 
             while true do
@@ -480,10 +566,41 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                 if distance > 1 then
                     Wait(1000)
                 else
+                    -- ATTACH OWL TO PLAYER
+                    local model = GetEntityModel(cuteBird)
+                    local AttachConfig = Config.BirdAttach["A_C_Hawk_01"]
+                    local Attach
+
+                    -- Determine attachment config based on player's gender
+                    if IsPedMale(PlayerPedId()) then
+                        Attach = AttachConfig.Male
+                    else
+                        Attach = AttachConfig.Female
+                    end
+
+                    AttachEntityToEntity(
+                        cuteBird,
+                        PlayerPedId(),
+                        Attach[1], -- Bone Index
+                        Attach[2], -- xOffset
+                        Attach[3], -- yOffset
+                        Attach[4], -- zOffset
+                        Attach[5], -- xRot
+                        Attach[6], -- yRot
+                        Attach[7], -- zRot
+                        false, false, true, false, 0, true, false, false
+                    )
+
+                    FreezeEntityPosition(cuteBird, true)
+                    ClearPedTasksImmediately(cuteBird)
+                    SetBlockingOfNonTemporaryEvents(cuteBird, true)
+
+                    --lib.notify({ title = locale("cl_title_11"), description = locale("cl_bird_attached"), type = 'success', duration = 3000 })
                     break
                 end
             end
 
+            -- OPEN MENU
             local sendButton = locale("cl_send_button_free")
 
             if Config.ChargePlayer then
@@ -507,6 +624,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             })
 
             if not input then
+                -- Cleanup if dialog is cancelled
                 FreezeEntityPosition(PlayerPedId(), false)
                 SetEntityInvincible(PlayerPedId(), false)
                 ClearPedTasks(PlayerPedId())
@@ -515,6 +633,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                 SetEntityInvincible(cuteBird, false)
                 SetEntityCanBeDamaged(cuteBird, true)
                 SetEntityAsMissionEntity(cuteBird, false, false)
+				SetEntityCollision(cuteBird, false, false)
                 SetEntityAsNoLongerNeeded(cuteBird)
                 DeleteEntity(cuteBird)
 
@@ -523,61 +642,76 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                 end
 
                 lib.notify({ title = locale("cl_title_11"), description = locale('cl_cancel_send'), type = 'error', duration = 7000 })
-
                 return
             end
 
+            -- Process message sending
             local recipient = input[1]
             local subject = input[2]
             local message = input[3]
-            if recipient and subject and message then
-                local alert = lib.alertDialog({
-                    header = sendButton,
-                    content = locale("cl_title_10"),
-                    centered = true,
-                    cancel = true
-                })
-                if alert == 'confirm' then
+            
+            local alert = lib.alertDialog({
+                header = sendButton,
+                content = locale("cl_title_10"),
+                centered = true,
+                cancel = true
+            })
 
-                    Debug("recipient", recipient)
-                    Debug("subject", subject)
-                    Debug("message", message)
+            if alert == 'confirm' then
+                local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
+                local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
+                local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
+                local senderfullname = senderfirstname..' '..senderlastname
 
-                    local senderfirstname = RSGCore.Functions.GetPlayerData().charinfo.firstname
-                    local senderlastname = RSGCore.Functions.GetPlayerData().charinfo.lastname
-                    local sendertelegram = RSGCore.Functions.GetPlayerData().citizenid
-                    local senderfullname = senderfirstname..' '..senderlastname
-
-                    Debug("sendertelegram:", sendertelegram)
-                    Debug("senderfullname:", senderfullname)
-                    Debug("recipient:", recipient)
-                    Debug("subject:", subject)
-                    Debug("message:", message)
-
-                    Debug("targetPed:", targetPed)
-
-                    FreezeEntityPosition(ped, false)
-                    SetEntityInvincible(ped, false)
-                    ClearPedTasks(ped)
-                    ClearPedSecondaryTask(ped)
-
-                    Wait(3000)
-
-                    TaskFlyToCoord(cuteBird, 0, targetCoords.x - coordsOffset, targetCoords.y - coordsOffset, targetCoords.z + 75, 1, 0)
-
-                    Wait(Config.BirdArrivalDelay)
-
-                    SetEntityInvincible(cuteBird, false)
-                    SetEntityCanBeDamaged(cuteBird, true)
-                    SetEntityAsMissionEntity(cuteBird, false, false)
-                    SetEntityAsNoLongerNeeded(cuteBird)
-                    DeleteEntity(cuteBird)
-                    RemoveBlip(birdBlip)
-
-                    TriggerServerEvent('rsg-telegram:server:SendMessage', senderID, sendertelegram, senderfullname, recipient, locale('cl_message_prefix')..': '..subject, message)
+                -- Detach bird ONLY if attached and ensure bird is not frozen/invincible
+                if IsEntityAttached(cuteBird) then
+                    print("Attempting to detach bird")
+                    DetachEntity(cuteBird, true, true)
+                    SetEntityCollision(cuteBird, true, true)  -- Make sure bird has collision after detaching
+                    FreezeEntityPosition(cuteBird, false)    -- Unfreeze bird so it can move
+                    SetEntityInvincible(cuteBird, false)     -- Make bird damageable again
+                    print("Bird detached")
                 else
-                    lib.notify({ title = locale("cl_title_15"), description = locale("cl_title_16"),'', type = 'error' })
+                    print("Bird is not attached, skipping detachment")
                 end
+
+                -- Reset player state
+                FreezeEntityPosition(ped, false)
+                SetEntityInvincible(ped, false)
+                ClearPedTasks(ped)
+                ClearPedSecondaryTask(ped)
+
+                -- Wait before giving bird the fly task
+                Wait(100)
+
+                -- Make bird fly away after detaching
+                TaskFlyToCoord(cuteBird, 0, targetCoords.x - coordsOffset, targetCoords.y - coordsOffset, targetCoords.z + 75, 1, 0)
+
+                Wait(Config.BirdArrivalDelay)
+
+                -- Cleanup bird after flying
+                SetEntityInvincible(cuteBird, false)
+                FreezeEntityPosition(cuteBird, false)
+                SetEntityCanBeDamaged(cuteBird, true)
+                SetEntityAsMissionEntity(cuteBird, false, false)
+                SetEntityAsNoLongerNeeded(cuteBird)
+                DeleteEntity(cuteBird)
+                
+                if birdBlip ~= nil then
+                    RemoveBlip(birdBlip)
+                end
+
+                -- Send message to server
+                TriggerServerEvent('rsg-telegram:server:SendMessage', 
+                    senderID, 
+                    sendertelegram, 
+                    senderfullname, 
+                    recipient, 
+                    locale('cl_message_prefix')..': '..subject, 
+                    message
+                )
+            else
+                lib.notify({ title = locale("cl_title_15"), description = locale("cl_title_16"), type = 'error' })
             end
         else
             lib.notify({ title = locale("cl_title_15"), description = locale("cl_title_16"), type = 'error' })
