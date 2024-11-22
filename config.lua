@@ -1,5 +1,12 @@
 Config = {}
 
+Config.BirdAttach = {
+    ["A_C_Hawk_01"] = {
+        Male = {296, 0.19, 0.01, 0.27, 0.0, 0.0, 0.0},
+        Female = {363, 0.12, -0.02, 0.27, 0.0, 0.0, 0.0}
+    }
+}
+
 -- General Settings
 Config.Debug           = false -- Dnable/disable debug functions
 Config.AllowSendToSelf = false -- A debug functions to allow sending letter to ourself (testing purpose)
