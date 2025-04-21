@@ -17,9 +17,9 @@ end)
 RegisterServerEvent('rsg-telegram:server:SendMessage')
 AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, sendername, tgtid, subject, message)
     local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
+    local RSGPlayer = RSGCore.Functions.GetPlayer(src)
 
-    if Player == nil then return end
+    if RSGPlayer == nil then return end
     -- local _tgtid = tonumber(tgtid)
     local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(tgtid)
     if targetPlayer == nil then
@@ -27,7 +27,7 @@ AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, se
         return
     end
 
-    if not Config.AllowSendToSelf and Player.PlayerData.citizenid == tgtid then
+    if not Config.AllowSendToSelf and RSGPlayer.PlayerData.citizenid == tgtid then
         TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_send_to_self'), type = 'error', duration = 5000 })
         return
     end
@@ -35,7 +35,7 @@ AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, se
     local _citizenid = targetPlayer.PlayerData.citizenid
     local targetPlayerName = targetPlayer.PlayerData.charinfo.firstname..' '..targetPlayer.PlayerData.charinfo.lastname
     local cost = Config.CostPerLetter
-    local cashBalance = Player.PlayerData.money['cash']
+    local cashBalance = RSGPlayer.PlayerData.money['cash']
     local sentDate = os.date('%x')
 
     if Config.ChargePlayer and cashBalance < cost then
@@ -44,19 +44,22 @@ AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, se
     end
 
     exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`) VALUES (?, ?, ?, ?, ?, ?, ?)',{_citizenid, targetPlayerName, sender, sendername, subject, sentDate, message})
+    local state = Player(targetPlayer.PlayerData.source).state
+    state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) + 1
+    
     TriggerClientEvent('rsg-telegram:client:ReceiveMessage', targetPlayer.PlayerData.source, senderID, targetPlayerName)
 
     if Config.ChargePlayer then
-        Player.Functions.RemoveMoney('cash', cost, 'send-post')
+        RSGPlayer.Functions.RemoveMoney('cash', cost, 'send-post')
     end
 end)
 
 RegisterServerEvent('rsg-telegram:server:SendMessagePostOffice')
 AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, sendername, citizenid, subject, message)
     local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
+    local RSGPlayer = RSGCore.Functions.GetPlayer(src)
     local cost = Config.CostPerLetter
-    local cashBalance = Player.PlayerData.money['cash']
+    local cashBalance = RSGPlayer.PlayerData.money['cash']
     local sentDate = os.date('%x')
 
     if Config.ChargePlayer and cashBalance < cost then
@@ -73,11 +76,16 @@ AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, se
     local tFullName = tFirstName..' '..tLastName
 
     exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`) VALUES (?, ?, ?, ?, ?, ?, ?);', {citizenid, tFullName, sender, sendername, subject, sentDate, message})
+    local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(citizenid)
+    if (targetPlayer) then 
+        local state = Player(targetPlayer.PlayerData.source).state
+        state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) + 1
+    end
 
     TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale("sv_letter_delivered", {pName = tFullName}), type = 'success', duration = 5000 })
 
     if Config.ChargePlayer then
-        Player.Functions.RemoveMoney('cash', cost, 'send telegram')
+        RSGPlayer.Functions.RemoveMoney('cash', cost, 'send telegram')
     end
 end)
 
@@ -128,6 +136,8 @@ AddEventHandler('rsg-telegram:server:GetMessages', function(tid)
     {
         ['@id'] = tid
     })
+    local state = Player(src).state
+    state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) - 1
 
     TriggerClientEvent('rsg-telegram:client:MessageData', src, telegram)
 end)
@@ -145,6 +155,11 @@ AddEventHandler('rsg-telegram:server:DeleteMessage', function(tid)
     if result[1] == nil then
         TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_delete_fail'), type = 'error', duration = 5000 })
         return
+    end
+
+    if result[1].status == 0 or result[1].birdstatus == 0 then
+        local state = Player(src).state
+        state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) - 1
     end
 
     MySQL.Async.execute('DELETE FROM telegrams WHERE id = @id',
@@ -213,4 +228,18 @@ end)
 RSGCore.Commands.Add('addressbook', locale("sv_command"), {}, false, function(source)
     local src = source
     TriggerClientEvent('rsg-telegram:client:OpenAddressbook', src)
+end)
+
+-- count telegrams for player
+RSGCore.Functions.CreateCallback('rsg-telegram:server:getTelegramsAmount', function(source, cb)
+    local src = source
+    local Player = RSGCore.Functions.GetPlayer(src)
+    if Player ~= nil then
+        local result = MySQL.prepare.await('SELECT COUNT(*) FROM telegrams WHERE citizenid = ? AND (status = ? OR birdstatus = ?)', {Player.PlayerData.citizenid, 0, 0})
+        if result > 0 then
+            cb(result)
+        else
+            cb(0)
+        end
+    end
 end)
