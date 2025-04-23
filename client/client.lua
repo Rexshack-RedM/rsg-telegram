@@ -14,15 +14,24 @@ local howFar = 0
 local senderID = nil
 local sID = nil
 local tPName = nil
-local isReceiving = false
 local buildingNotified = false
 local isBirdCanSpawn = false
 local isBirdAlreadySpawned = false
 local birdTime = Config.BirdTimeout
 local blipEntries = {}
 
+---@deprecated use state LocalPlayer.state.telegramIsBirdPostApproaching
 exports('IsBirdPostApproaching', function()
-    return isReceiving
+    return LocalPlayer.state.telegramIsBirdPostApproaching
+end)
+
+CreateThread(function() 
+    LocalPlayer.state.telegramIsBirdPostApproaching = false
+    repeat Wait(100) until LocalPlayer.state.isLoggedIn
+
+    RSGCore.Functions.TriggerCallback('rsg-telegram:server:getTelegramsAmount', function(amount)
+        LocalPlayer.state:set('telegramUnreadMessages', amount or 0, true)
+    end)
 end)
 
 -- Bird Prompt
@@ -175,7 +184,7 @@ local function Prompts()
         RemoveBlip(birdBlip)
     end
 
-    isReceiving = false
+    LocalPlayer.state.telegramIsBirdPostApproaching = false
     isBirdAlreadySpawned = false
     notified = false
 
@@ -330,7 +339,7 @@ end)
 -- Receive Message
 RegisterNetEvent('rsg-telegram:client:ReceiveMessage')
 AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
-    isReceiving = true
+    LocalPlayer.state.telegramIsBirdPostApproaching = true
     sID = SsID
     tPName = StPName
     local ped = PlayerPedId()
@@ -340,7 +349,7 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
     isBirdAlreadySpawned = false
     birdTime = Config.BirdDeliveryTimeout or 300
 
-    while isReceiving do
+    while LocalPlayer.state.telegramIsBirdPostApproaching do
         Wait(1)
         playerCoords = GetEntityCoords(ped)
         local myCoords = vector3(playerCoords.x, playerCoords.y, playerCoords.z)
@@ -453,7 +462,7 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
 
                 -- Trigger server event and end receiving state
                 TriggerServerEvent('rsg-telegram:server:ReadMessage', sID)
-                isReceiving = false
+                LocalPlayer.state.telegramIsBirdPostApproaching = false
                 return
             end
         end
@@ -498,7 +507,7 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
             DeleteEntity(cuteBird)
             RemoveBlip(birdBlip)
             notified = false
-            isReceiving = false
+            LocalPlayer.state.telegramIsBirdPostApproaching = false
             return
         end
 
@@ -518,7 +527,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             local sourceplayer = 0
             local option = {}
 
-            if isReceiving then
+            if LocalPlayer.state.telegramIsBirdPostApproaching then
                 lib.notify({ title = locale("cl_title_11"), description = locale('cl_send_receiving'), type = 'error', duration = 7000 })
                 return
             end
