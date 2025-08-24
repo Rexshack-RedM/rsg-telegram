@@ -1,12 +1,13 @@
 Config = {}
 
+-- Head mount: sitzt zentral über dem Kopf, leicht nach vorn
 Config.BirdAttach = {
     ["A_C_Hawk_01"] = {
-        Male = {296, 0.19, 0.01, 0.27, 0.0, 0.0, 0.0},
-        Female = {363, 0.12, -0.02, 0.27, 0.0, 0.0, 0.0}
+        -- BoneName,  x,     y,     z,     rx,   ry,   rz
+        Generic = {"SKEL_Head", 0.00, 0.03, 0.22,  0.0, 0.0, 180.0}
+        -- Tipp: z (Höhe) zwischen 0.18–0.26 feinjustieren, rz 170–200 für Blickrichtung
     }
 }
-
 -- General Settings
 Config.Debug           = false -- Dnable/disable debug functions
 Config.AllowSendToSelf = false -- A debug functions to allow sending letter to ourself (testing purpose)
