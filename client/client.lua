@@ -1,6 +1,102 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
 lib.locale()
 
+-- === BEGIN: Robust bird attach helpers ===
+local function _notify(msg, ntype, time)
+    ntype = ntype or 'info'
+    time = time or 6000
+    if lib and lib.notify then
+        lib.notify({ title = locale("cl_title_13") or "Telegram", description = msg, type = ntype, duration = time })
+    elseif RSGCore and RSGCore.Functions and RSGCore.Functions.Notify then
+        RSGCore.Functions.Notify(msg, ntype, time)
+    else
+        print(('[Notify:%s] %s'):format(ntype, msg))
+    end
+end
+
+local function _boneIndexWithFallback(ped, primaryName)
+    local idx = GetEntityBoneIndexByName(ped, primaryName)
+    if idx ~= -1 then return idx end
+    local fallbacks = { "SKEL_Head", "SKEL_Neck_1", "SKEL_Spine2", "SKEL_L_Clavicle", "SKEL_Spine1", "SKEL_Spine0" }
+    for _, name in ipairs(fallbacks) do
+        idx = GetEntityBoneIndexByName(ped, name)
+        if idx ~= -1 then return idx end
+    end
+    return 0
+end
+
+function AttachBirdToPed(ped, bird)
+    if not DoesEntityExist(ped) or not DoesEntityExist(bird) then return false end
+
+    local px, py, pz = table.unpack(GetEntityCoords(ped))
+    SetEntityCoordsNoOffset(bird, px, py, pz + 0.9, true, true, true)
+
+    local attachCfg = Config.BirdAttach and Config.BirdAttach["A_C_Hawk_01"]
+    local boneName, ox, oy, oz, rx, ry, rz = "SKEL_Head", 0.00, 0.03, 0.22, 0.0, 0.0, 180.0
+    if attachCfg then
+        local variant = attachCfg.Generic or attachCfg.Male or attachCfg.Female
+        if type(variant[1]) == "string" then
+            boneName, ox, oy, oz, rx, ry, rz = table.unpack(variant)
+        elseif type(variant[1]) == "number" then
+            boneName, ox, oy, oz, rx, ry, rz = "SKEL_Head", variant[2], variant[3], variant[4], variant[5], variant[6], variant[7]
+        end
+    end
+
+    local boneIndex = _boneIndexWithFallback(ped, boneName)
+
+    SetEntityCollision(bird, true, true)
+    SetEntityDynamic(bird, true)
+    SetEntityAsMissionEntity(bird, true, true)
+
+    local tryBones = {
+        boneIndex,
+        _boneIndexWithFallback(ped, "SKEL_Head"),
+        _boneIndexWithFallback(ped, "SKEL_Neck_1"),
+        _boneIndexWithFallback(ped, "SKEL_Spine2")
+    }
+
+    local attachedOk = false
+    for i, bIdx in ipairs(tryBones) do
+        local zBoost = (i - 1) * 0.02
+
+        AttachEntityToEntity(
+            bird, ped, bIdx,
+            ox, oy, oz + zBoost, rx, ry, rz,
+            false, false, true, false, 2, true, false, false
+        )
+
+        Citizen.Wait(60)
+        local bPos, pPos = GetEntityCoords(bird), GetEntityCoords(ped)
+        local dz = (bPos.z - pPos.z)
+
+        if dz >= 0.20 then
+            attachedOk = true
+            break
+        else
+            DetachEntity(bird, true, true)
+        end
+    end
+
+    if not attachedOk then
+        _notify(locale("cl_bird_blocked") or "Something is in the Way, Bird could not Land, 'error', 6000)
+        return false
+    end
+
+    FreezeEntityPosition(bird, true)
+    Citizen.Wait(50)
+    FreezeEntityPosition(bird, false)
+    return true
+end
+
+function DetachBirdSafe(bird, ped)
+    if not DoesEntityExist(bird) then return end
+    DetachEntity(bird, true, true)
+    SetEntityCollision(bird, true, true)
+    FreezeEntityPosition(bird, false)
+    SetEntityInvincible(bird, false)
+end
+-- === END: Robust bird attach helpers ===
+
 local cuteBird = nil
 local birdPrompt = nil
 local letterPromptGroup = GetRandomIntInRange(0, 0xffffff)
@@ -403,24 +499,8 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
                 FreezeEntityPosition(ped, false)  -- Keep player frozen
                 SetEntityInvincible(ped, true)
                 TaskStartScenarioInPlace(ped, GetHashKey('WORLD_HUMAN_WRITE_NOTEBOOK'), -1, true, false, false, false)
-				SetEntityCollision(cuteBird, false, false)
-                -- Attach bird to player once it's close enough
-                local AttachConfig = Config.BirdAttach["A_C_Hawk_01"]
-                local Attach = IsPedMale(PlayerPedId()) and AttachConfig.Male or AttachConfig.Female
-
-                AttachEntityToEntity(
-                    cuteBird,
-                    PlayerPedId(),
-                    Attach[1], -- Bone Index
-                    Attach[2], -- xOffset
-                    Attach[3], -- yOffset
-                    Attach[4], -- zOffset
-                    Attach[5], -- xRot
-                    Attach[6], -- yRot
-                    Attach[7], -- zRot
-                    false, false, true, false, 0, true, false, false
-                )
-
+                -- Robust attach
+                AttachBirdToPed(PlayerPedId(), cuteBird)
                 -- Freeze bird in place and clear its tasks
                 FreezeEntityPosition(cuteBird, true)
                 ClearPedTasksImmediately(cuteBird)
@@ -429,12 +509,8 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
                 -- Wait for message delivery to complete
                 --Wait(10000)  -- Allow time for the player to read the message (optional)
 
-                -- Detach and prepare bird for departure
-                DetachEntity(cuteBird, true, true)
-                SetEntityCollision(cuteBird, false, false)
-                FreezeEntityPosition(cuteBird, false)
-                SetEntityInvincible(cuteBird, false)
-
+                -- Detach and prepare bird for departure (safe)
+                DetachBirdSafe(cuteBird, ped)
                 Wait(100)
 
                 -- Make bird fly away
@@ -556,7 +632,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
             TaskWhistleAnim(ped, GetHashKey('WHISTLEHORSELONG'))
 
             SpawnBirdPost(playerCoords.x, playerCoords.y - rFar, playerCoords.z, heading, rFar)
-			SetEntityCollision(cuteBird, false, false)
+			
 
             if cuteBird == nil then
                 lib.notify({ title = locale("cl_title_11"), description = locale("cl_title_14"), type = 'error', duration = 7000 })
@@ -565,7 +641,7 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
 
             -- Task the bird to fly to the player
             TaskFlyToCoord(cuteBird, 1, playerCoords.x, playerCoords.y, playerCoords.z, 1, 1)
-			SetEntityCollision(cuteBird, false, false)
+			
             TaskStartScenarioInPlace(ped, GetHashKey('WORLD_HUMAN_WRITE_NOTEBOOK'), -1, true, false, false, false)
 
             while true do
@@ -575,31 +651,8 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                 if distance > 1 then
                     Wait(1000)
                 else
-                    -- ATTACH OWL TO PLAYER
-                    local model = GetEntityModel(cuteBird)
-                    local AttachConfig = Config.BirdAttach["A_C_Hawk_01"]
-                    local Attach
-
-                    -- Determine attachment config based on player's gender
-                    if IsPedMale(PlayerPedId()) then
-                        Attach = AttachConfig.Male
-                    else
-                        Attach = AttachConfig.Female
-                    end
-
-                    AttachEntityToEntity(
-                        cuteBird,
-                        PlayerPedId(),
-                        Attach[1], -- Bone Index
-                        Attach[2], -- xOffset
-                        Attach[3], -- yOffset
-                        Attach[4], -- zOffset
-                        Attach[5], -- xRot
-                        Attach[6], -- yRot
-                        Attach[7], -- zRot
-                        false, false, true, false, 0, true, false, false
-                    )
-
+                    -- ATTACH OWL TO PLAYER (robust)
+                    AttachBirdToPed(PlayerPedId(), cuteBird)
                     FreezeEntityPosition(cuteBird, true)
                     ClearPedTasksImmediately(cuteBird)
                     SetBlockingOfNonTemporaryEvents(cuteBird, true)
@@ -642,7 +695,6 @@ RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
                 SetEntityInvincible(cuteBird, false)
                 SetEntityCanBeDamaged(cuteBird, true)
                 SetEntityAsMissionEntity(cuteBird, false, false)
-				SetEntityCollision(cuteBird, false, false)
                 SetEntityAsNoLongerNeeded(cuteBird)
                 DeleteEntity(cuteBird)
 
