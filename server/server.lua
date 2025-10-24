@@ -206,6 +206,18 @@ AddEventHandler('rsg-telegram:server:SavePerson', function(name,cid)
     local src = source
     local xPlayer = RSGCore.Functions.GetPlayer(src)
     while xPlayer == nil do Wait(0) end
+    
+    -- Check if person already exists in address book
+    local existing = MySQL.query.await('SELECT * FROM address_book WHERE owner = ? AND citizenid = ?', {
+        xPlayer.PlayerData.citizenid,
+        cid
+    })
+
+    if existing and existing[1] then
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale("sv_already_exists"), type = 'error', duration = 5000 })
+        return
+    end
+
     exports.oxmysql:execute('INSERT INTO address_book (`citizenid`, `name`, `owner`) VALUES (?, ?, ?);', {cid, name, xPlayer.PlayerData.citizenid})
     TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale("sv_title_40"), type = 'success', duration = 5000 })
 end)

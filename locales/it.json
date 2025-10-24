@@ -66,6 +66,7 @@
     "sv_letter_delivered_suc": "con successo!",
     "sv_delete_success": "Messaggio eliminato con successo!",
     "sv_command" : "La tua Rubrica Personale",
+    "sv_already_exists" : "This person already exists in your address book!",
 
     "message": "Scrivi il tuo messaggio qui!",
     "wait_between_send": "Si prega di attendere",

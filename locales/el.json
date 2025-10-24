@@ -66,6 +66,7 @@
     "sv_letter_delivered_suc": "επιτυχώς!",
     "sv_delete_success": "Το μήνυμα διαγράφηκε επιτυχώς!",
     "sv_command": "Το Προσωπικό Βιβλίο Επαφών σου",
+    "sv_already_exists" : "This person already exists in your address book!",
 
     "message": "Γράψε το μήνυμά σου εδώ!",
     "wait_between_send": "Παρακαλώ περίμενε",

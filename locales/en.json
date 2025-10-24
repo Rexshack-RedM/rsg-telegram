@@ -66,6 +66,7 @@
     "sv_letter_delivered_suc": "successfully!",
     "sv_delete_success": "Message deleted successfully!",
     "sv_command" : "Your Personal Addressbook",
+    "sv_already_exists" : "This person already exists in your address book!",
 
     "message": "Write your message here!",
     "wait_between_send": "Please wait",

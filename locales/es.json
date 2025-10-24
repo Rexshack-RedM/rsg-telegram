@@ -66,6 +66,7 @@
     "sv_letter_delivered_suc": "¡con éxito!",
     "sv_delete_success": "¡Mensaje eliminado con éxito!",
     "sv_command": "Tu libreta de direcciones personal",
+    "sv_already_exists" : "This person already exists in your address book!",
 
     "message": "¡Escribe tu mensaje aquí!",
     "wait_between_send": "Por favor, espere",
