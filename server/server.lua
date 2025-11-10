@@ -3,7 +3,7 @@ local RSGCore = exports['rsg-core']:GetCoreObject()
 lib.locale()
 
 -- Make Bird Post as a Usable Item
-RSGCore.Functions.CreateUseableItem('birdpost', function(source)
+RSGCore.Functions.CreateUseableItem(Config.BirdPostItem, function(source)
     TriggerClientEvent('rsg-telegram:client:WriteMessage', source)
 end)
 

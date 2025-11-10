@@ -73,6 +73,7 @@ Config.Debug           = false
 Config.AllowSendToSelf = false
 Config.ChargePlayer    = true
 Config.CostPerLetter   = 0.50
+Config.BirdPostItem    = 'birdpost'  -- Item name for bird post delivery
 
 -- Post Office Locations (example excerpt)
 Config.PostOfficeLocations = {
@@ -103,6 +104,8 @@ Add this to `rsg-inventory/items.lua`:
 ```lua
 birdpost = { name = 'birdpost', label = 'Telegram Bird', weight = 500, type = 'item', image = 'birdspost.png', unique = true, useable = true, shouldClose = true, description = 'A trained bird used to deliver telegrams.' },
 ```
+
+**Note:** The item name (`birdpost`) can be customized via `Config.BirdPostItem` in `config.lua`. Make sure the item name in your inventory matches the config setting.
 
 Usage registration:
 ```lua
