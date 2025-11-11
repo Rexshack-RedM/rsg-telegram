@@ -165,7 +165,7 @@ local function Prompts()
 
     local ped = PlayerPedId()
 
-    if destination < 3 and IsPedOnMount(ped) or IsPedOnVehicle(ped) then
+    if destination < Config.BirdPromptDistance and IsPedOnMount(ped) or IsPedOnVehicle(ped) then
         lib.notify({ title = locale("title_11"), description = locale('cl_player_on_horse'), type = 'error', duration = 7000 })
 
         Wait(3000)
@@ -325,7 +325,7 @@ CreateThread(function()
     while true do
         Wait(1)
 
-        if notified and destination < 3 then
+        if notified and destination < Config.BirdPromptDistance then
             local Bird = CreateVarString(10, "LITERAL_STRING", locale("cl_prompt_desc"))
             PromptSetActiveGroupThisFrame(letterPromptGroup, Bird)
 
@@ -368,7 +368,9 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
 
         -- Initial bird spawn
         if isBirdCanSpawn and not isBirdAlreadySpawned then
-            SpawnBirdPost(playerCoords.x - 100, playerCoords.y - 100, playerCoords.z + 100, 92.0, rFar, 0)
+            SpawnBirdPost(playerCoords.x - Config.BirdSpawnDeliveryDistance,
+            playerCoords.y - Config.BirdSpawnDeliveryDistance, playerCoords.z + 100,
+            92.0, rFar, 0)
             if cuteBird then
                 TaskFlyToCoord(cuteBird, 0, playerCoords.x, playerCoords.y, playerCoords.z + 0.8, 1, 0) -- Make bird fly closer to the player
                 isBirdCanSpawn = false
@@ -388,15 +390,15 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
                 lib.notify({ title = locale("cl_title_13"), description = locale('cl_wait_for_bird'), type = 'info', duration = 7000 })
             end
 
-            -- Freeze the player as the bird approaches (within 10 meters)
-            if destination <= 10 and not freezedPlayer then
+            -- Freeze the player as the bird approaches (within configured meters)
+            if destination <= Config.BirdFreezeDistance and not freezedPlayer then
                 FreezeEntityPosition(ped, true)  -- Freeze player
                 SetEntityInvincible(ped, true)  -- Make player invincible
                 freezedPlayer = true
             end
 
             -- Bird landing and message delivery logic
-            if destination <= 2.5 then
+            if destination <= Config.BirdDeliveryDistance then
                 -- Prepare player for message
                 ClearPedTasks(ped)
                 ClearPedSecondaryTask(ped)
@@ -477,7 +479,7 @@ AddEventHandler('rsg-telegram:client:ReceiveMessage', function(SsID, StPName)
         Debug("notified", notified)
         Debug("destination", destination)
 
-        if cuteBird ~= nil and not IsPedAir and notified and destination > 3 then
+        if cuteBird ~= nil and not IsPedAir and notified and destination > Config.BirdPromptDistance then
             if Config.AutoResurrect and isBirdDead then
                 Debug("isBirdDead", isBirdDead)
                 ClearPedTasksImmediately(cuteBird)
