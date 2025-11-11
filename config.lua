@@ -19,6 +19,11 @@ Config.BirdModel           = 'A_C_Owl_01' -- Bird model to use
 Config.AutoResurrect       = true      -- Auto resurrect the bird when it's died while sending letters
 Config.BirdArrivalDelay    = 20000     -- Set the bird to arrives after 20 secs
 Config.BirdTimeout         = 180       -- When timeout reached, the bird will fail to deliver the letter
+Config.BirdDeliveryTimeout = 300       -- Timeout for bird delivery in seconds
+Config.BirdFreezeDistance  = 10.0      -- Distance at which player gets frozen waiting for bird
+Config.BirdDeliveryDistance = 2.5      -- Distance at which bird delivers the letter to player
+Config.BirdPromptDistance  = 3.0       -- Distance at which prompt is shown to retrieve letter
+Config.BirdSpawnDeliveryDistance = 30.0  -- Distance from player where bird will spawn to deliver letters
 
 -- prompt locations
 Config.PostOfficeLocations = {
