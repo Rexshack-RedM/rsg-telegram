@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS `telegrams` (
   `message` varchar(455) NOT NULL,
   `status` varchar(1) NOT NULL DEFAULT '0',
   `birdstatus` TINYINT(2) NOT NULL DEFAULT '0',
+  `fromPostOffice` TINYINT(1) NOT NULL DEFAULT '0',
+  `pickedUp` TINYINT(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

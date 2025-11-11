@@ -4,205 +4,230 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Letters</title>
+    <title>Telegram System</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css"
-        integrity="sha512-+4zCK9k+qNFUR5X+cKL9EIR+ZOhtIloNl9GIKS57V1MyNsYpYcUrUeQc9vNfzsWfV28IaLL3i96P9sdNyeRssA=="
-        crossorigin="anonymous">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js">
-    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 </head>
 
 <body>
-    <div class="inbox">
-        <div class="header">
-            <div class="header-left">
-                <div>
-                    <h1>Global Connection</h1>
-                </div>
-                <div>
-                    <p>We are the bridge that connects hearts across distance. Every letter, every word, is a bond that
-                        unites stories and people, keeping relationships alive. In this fast-paced world, taking the
-                        time to send a written message is a gesture of care and dedication that transcends borders.</p>
-                </div>
-            </div>
-            <div class="header-center" class="postoffice">
-                <div>
-                    <p>Your voice, anywhere</p>
-                </div>
-                <div>
+<body>
+    <!-- Main Telegram Container -->
+    <div class="telegram-container" id="telegramContainer">
+        <!-- Header -->
+        <div class="telegram-header">
+            <h1 class="telegram-title">Telegraph Office</h1>
+            <button class="telegram-close" id="closeBtn">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
 
-                </div>
-                <div>
-                    <h1>Postal Telegrah</h1>
-                </div>
-                <div>
-                    <p>We deliver your message where you need it</p>
-                </div>
-            </div>
-            <div class="header-rigth">
-                <div>
-                    <p>Committed to bringing your message to every corner. Trusted postal service for over 100 years,
-                        Safe Delivery</p>
-                </div>
-                <div>
-                    <p>Show</p>
-                </div>
-                <div>
-                    <h1>Staff</h1>
-                </div>
-            </div>
+        <!-- Tab Navigation -->
+        <div class="telegram-tabs">
+            <button class="telegram-tab active" data-tab="inbox">
+                <i class="fas fa-inbox"></i>
+                <span>Inbox</span>
+                <span class="unread-badge" id="unreadBadge" style="display: none;">0</span>
+            </button>
+            <button class="telegram-tab" data-tab="new-message">
+                <i class="fas fa-pen-to-square"></i>
+                <span>New Message</span>
+            </button>
+            <button class="telegram-tab" data-tab="addressbook">
+                <i class="fas fa-address-book"></i>
+                <span>Addressbook</span>
+            </button>
         </div>
-        <div class="inbox_search">
-            <input type="text" id="searchInput" placeholder="Search your messages...">
 
-            <!-- <div class="showSearchOptions" id="searchOptions"></div> Contenedor para las opciones de búsqueda -->
-            <!-- <div id="searchBtn" class="search-button" style="padding-left: 0.4vw;">
-                <svg width="1vw" height="1vw" viewBox="-0.5 0 25 25" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
-                    <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
-                    <g id="SVGRepo_iconCarrier">
-                        <path
-                            d="M22 11.8201C22 9.84228 21.4135 7.90885 20.3147 6.26436C19.2159 4.61987 17.6542 3.33813 15.8269 2.58126C13.9996 1.82438 11.9889 1.62637 10.0491 2.01223C8.10927 2.39808 6.32748 3.35052 4.92896 4.74904C3.53043 6.14757 2.578 7.92935 2.19214 9.86916C1.80629 11.809 2.00436 13.8197 2.76123 15.6469C3.51811 17.4742 4.79985 19.036 6.44434 20.1348C8.08883 21.2336 10.0222 21.8201 12 21.8201"
-                            stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                        <path d="M2 11.8201H22" stroke="#000000" stroke-width="1.5" stroke-linecap="round"
-                            stroke-linejoin="round"></path>
-                        <path
-                            d="M12 21.8201C10.07 21.8201 8.5 17.3401 8.5 11.8201C8.5 6.30007 10.07 1.82007 12 1.82007C13.93 1.82007 15.5 6.30007 15.5 11.8201"
-                            stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                        <path
-                            d="M18.3691 21.6901C20.3021 21.6901 21.8691 20.1231 21.8691 18.1901C21.8691 16.2571 20.3021 14.6901 18.3691 14.6901C16.4361 14.6901 14.8691 16.2571 14.8691 18.1901C14.8691 20.1231 16.4361 21.6901 18.3691 21.6901Z"
-                            stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                        <path d="M22.9998 22.8202L20.8398 20.6702" stroke="#000000" stroke-width="1.5"
-                            stroke-linecap="round" stroke-linejoin="round"></path>
-                    </g>
-                </svg>
-            </div> -->
-            <div id="filterBtn" class="filter-button" style="padding-left: 0.4vw;">
-                <svg width="1vw" height="1vw" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
-                    <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
-                    <g id="SVGRepo_iconCarrier">
-                        <path fill-rule="evenodd" clip-rule="evenodd"
-                            d="M15 10.5A3.502 3.502 0 0 0 18.355 8H21a1 1 0 1 0 0-2h-2.645a3.502 3.502 0 0 0-6.71 0H3a1 1 0 0 0 0 2h8.645A3.502 3.502 0 0 0 15 10.5zM3 16a1 1 0 1 0 0 2h2.145a3.502 3.502 0 0 0 6.71 0H21a1 1 0 1 0 0-2h-9.145a3.502 3.502 0 0 0-6.71 0H3z"
-                            fill="#000000"></path>
-                    </g>
-                </svg>
+        <!-- Tab Content -->
+        <div class="telegram-content">
+            <!-- Inbox Tab -->
+            <div class="tab-panel active" id="inbox">
+                <div class="inbox-controls">
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search messages...">
+                    <button class="control-btn" id="clearSearchBtn" title="Clear Search">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
+                
+                <div class="inbox-list" id="inboxList">
+                    <!-- Messages will be loaded here -->
+                </div>
             </div>
-            <div id="filterOptions">
-                <div class="sortBtn" data-sort="alphabetical">A..Z</div>
-                <div class="sortBtn" data-sort="readStatus">Read</div>
-                <div class="sortBtn" data-sort="subject">Subject</div>
-                <div class="sortBtn" data-sort="sender">Sender</div>
-                <div class="sortBtn" data-sort="date">Date</div>
+
+            <!-- New Message Tab -->
+            <div class="tab-panel" id="new-message">
+                <div class="message-form">
+                    <div class="form-group">
+                        <label for="recipientSelect">Recipient:</label>
+                        <select id="recipientSelect" class="form-select">
+                            <option value="">Select Recipient...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="subjectInput">Subject:</label>
+                        <input type="text" id="subjectInput" class="form-input" placeholder="Enter subject...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="messageInput">Message:</label>
+                        <textarea id="messageInput" class="form-textarea" rows="8" placeholder="Write your message..."></textarea>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button class="btn-primary" id="sendMessageBtn">
+                            <i class="fas fa-paper-plane"></i>
+                            Send Message
+                        </button>
+                        <button class="btn-secondary" id="clearFormBtn">
+                            <i class="fas fa-eraser"></i>
+                            Clear
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="inbox_button" id="markReadBtn" style="padding-left: 75%;">
-                <svg width="1vw" height="1vw" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
-                    <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
-                    <g id="SVGRepo_iconCarrier">
-                        <path
-                            d="M10 9.66679L11.3846 11.0001L14.5 8.00012M3.02832 10.0001L10.2246 14.8167C10.8661 15.2444 11.1869 15.4582 11.5336 15.5413C11.8399 15.6147 12.1593 15.6147 12.4657 15.5413C12.8124 15.4582 13.1332 15.2444 13.7747 14.8167L20.971 10.0001M10.2981 4.06892L4.49814 7.71139C3.95121 8.05487 3.67775 8.2266 3.4794 8.45876C3.30385 8.66424 3.17176 8.90317 3.09111 9.16112C3 9.45256 3 9.77548 3 10.4213V16.8001C3 17.9202 3 18.4803 3.21799 18.9081C3.40973 19.2844 3.71569 19.5904 4.09202 19.7821C4.51984 20.0001 5.0799 20.0001 6.2 20.0001H17.8C18.9201 20.0001 19.4802 20.0001 19.908 19.7821C20.2843 19.5904 20.5903 19.2844 20.782 18.9081C21 18.4803 21 17.9202 21 16.8001V10.4213C21 9.77548 21 9.45256 20.9089 9.16112C20.8282 8.90317 20.6962 8.66424 20.5206 8.45876C20.3223 8.2266 20.0488 8.05487 19.5019 7.71139L13.7019 4.06891C13.0846 3.68129 12.776 3.48747 12.4449 3.41192C12.152 3.34512 11.848 3.34512 11.5551 3.41192C11.224 3.48747 10.9154 3.68129 10.2981 4.06892Z"
-                            stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </g>
-                </svg>
+
+            <!-- Addressbook Tab -->
+            <div class="tab-panel" id="addressbook">
+                <div class="addressbook-controls">
+                    <button class="btn-primary" id="addContactBtn">
+                        <i class="fas fa-user-plus"></i>
+                        Add New Contact
+                    </button>
+                </div>
+                
+                <div class="addressbook-list" id="addressbookList">
+                    <!-- Contacts will be loaded here -->
+                </div>
             </div>
-            <!-- <div class="inbox_button2" id="sendNoteBtn" style="padding-left: 0.4vw;">
-                <svg fill="#000000" width="1vw" height="1vw" viewBox="0 0 64 64" data-name="Layer 1" id="Layer_1" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><title></title><path d="M51.25,59h-27a2,2,0,0,1-2-2V42.5a2,2,0,0,1,4,0V55h23V24.82L43.52,19H26.25V32a2,2,0,0,1-4,0V17a2,2,0,0,1,2-2H44.36a2,2,0,0,1,1.42.6l6.9,7a2,2,0,0,1,.57,1.4V57A2,2,0,0,1,51.25,59Z"></path><path d="M24.25,49H12.75a2,2,0,0,1-2-2V7a2,2,0,0,1,2-2h27a2,2,0,0,1,2,2V17a2,2,0,0,1-2,2H26.25V31a2,2,0,0,1-4,0V17a2,2,0,0,1,2-2h13.5V9h-23V45h7.5V43.14a2,2,0,0,1,4,0V47A2,2,0,0,1,24.25,49Z"></path></g></svg>
-            </div> -->
-            <div class="inbox_button3" id="deleteSelectedBtn" style="padding-left: 0.4vw;">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="#000000" width="1vw" height="1vw" viewBox="0 0 24 24">
-                    <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
-                    <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
-                    <g id="SVGRepo_iconCarrier">
-                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path>
-                    </g>
-                </svg>
-            </div>
-        </div>
-        <div class="inbox_header">
-            <div class="inbox_checkbox">
-                <input type="checkbox" id="selectAll">
-            </div>
-            <div class="inbox_Status">Select</div>
-            <div class="inbox_subject_title"></div>
-            <div class="inbox_sendername_title">Sender</div>
-            <div class="inbox_date_title">Date</div>
-        </div>
-        <div class="inboxContainer">
-            <ul id="inboxList"></ul>
-        </div>
-        <div class="btn">
-            <button class="btn closePostoffice" style="background-color: #c7c7c5;">Close</button>
-            <button class="btn staffPostoffice" style="background-color: #38241b;color: white;">Staff</button>
-            <!-- <button class="btn lawPostoffice" style="background-color: #cc6a2a;color: white;">Law</button>
-            <button class="btn medicPostoffice" style="background-color: #719a0a;color: white;">Medic</button> -->
         </div>
     </div>
 
-    <div class="view">
-        <a href="#" class="close_view"></a>
-        <div class="telegram_header">
-            <div class="telegram_info">
-                <div>
-                    <b>Sender:</b> <span id="view_sendername"></span>
+    <!-- Add Contact Modal -->
+    <div class="message-modal" id="addContactModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Contact</h2>
+                <button class="modal-close" id="closeAddContactModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="contactName">Contact Name:</label>
+                    <input type="text" id="contactName" class="form-input" placeholder="Enter contact name...">
                 </div>
-                <div>
-                    <b>Recipient:</b> <span id="view_recipient"></span>
-                </div>
-                <div>
-                    <b>Date:</b> <span id="view_date"></span>
+                <div class="form-group">
+                    <label for="contactCitizenId">Citizen ID:</label>
+                    <input type="text" id="contactCitizenId" class="form-input" placeholder="Enter citizen ID...">
                 </div>
             </div>
-        </div>
-        <div class="telegram_subject">
-            <b>Subject:</b> <span id="view_subject"></span>
-        </div>
-        <br>
-        <div class="telegram_message">
-            <b>Message:</b> <span id="view_message"></span>
-        </div>
-        <br>
-        <div class="telegram_footer">
-            <button class="close_view">
-                <svg width="1vw" height="1vw" viewBox="0 0 24 24" id="SVGRoot" version="1.1"
-                    xmlns="http://www.w3.org/2000/svg" xmlns:cc="http://creativecommons.org/ns#"
-                    xmlns:dc="http://purl.org/dc/elements/1.1/"
-                    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-                    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-                    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-                    xmlns:svg="http://www.w3.org/2000/svg" fill="#000000">
-                    <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
-                    <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
-                    <g id="SVGRepo_iconCarrier">
-                        <defs id="defs2"></defs>
-                        <g id="layer1">
-                            <path
-                                d="M 20.029297 3 A 1 1 0 0 0 19.292969 3.2929688 L 17.257812 5.328125 C 15.687708 4.5455983 13.912737 4 12 4 C 8.6666667 4 5.7335794 5.6316279 3.6191406 7.3496094 C 2.5619212 8.2086001 1.7059096 9.0941755 1.09375 9.859375 C 0.78767021 10.241975 0.54228306 10.592509 0.35742188 10.916016 C 0.17256067 11.239523 3.7007434e-17 11.458333 0 12 C 0 12.541667 0.17256067 12.760477 0.35742188 13.083984 C 0.54228307 13.407491 0.78767021 13.758025 1.09375 14.140625 C 1.7059096 14.905824 2.5619212 15.7914 3.6191406 16.650391 C 4.0317573 16.985642 4.4832215 17.313668 4.9550781 17.630859 L 3.2929688 19.292969 A 1 1 0 0 0 3.2929688 20.707031 A 1 1 0 0 0 4.7070312 20.707031 L 6.7421875 18.671875 C 8.3122921 19.454402 10.087263 20 12 20 C 15.333333 20 18.266421 18.368372 20.380859 16.650391 C 21.438079 15.7914 22.29409 14.905824 22.90625 14.140625 C 23.21233 13.758025 23.457717 13.407491 23.642578 13.083984 C 23.827439 12.760477 24 12.541667 24 12 C 24 11.458333 23.827439 11.239523 23.642578 10.916016 C 23.457717 10.592509 23.21233 10.241975 22.90625 9.859375 C 22.29409 9.0941755 21.438079 8.2086001 20.380859 7.3496094 C 19.968243 7.0143584 19.516778 6.6863317 19.044922 6.3691406 L 20.707031 4.7070312 A 1 1 0 0 0 20.707031 3.2929688 A 1 1 0 0 0 20.029297 3 z M 12 6 C 13.296769 6 14.567291 6.3273006 15.75 6.8359375 L 12.068359 10.517578 A 2 2 0 0 1 12 10 A 2 2 0 0 1 13.177734 8.1777344 A 4 4 0 0 0 12 8 A 4 4 0 0 0 11.939453 8 A 4 4 0 0 0 8 12 A 4 4 0 0 0 8.5546875 14.03125 L 6.3984375 16.1875 C 5.8572135 15.84669 5.3474521 15.478716 4.8808594 15.099609 C 3.9380788 14.3336 3.1690904 13.531676 2.65625 12.890625 C 2.3998298 12.5701 2.2077169 12.287821 2.0957031 12.091797 C 2.0732826 12.052561 2.073845 12.034775 2.0605469 12 C 2.073845 11.965225 2.0732826 11.947439 2.0957031 11.908203 C 2.2077169 11.712179 2.3998298 11.4299 2.65625 11.109375 C 3.1690904 10.468324 3.9380788 9.6663999 4.8808594 8.9003906 C 6.7664206 7.3683721 9.3333333 6 12 6 z M 17.601562 7.8125 C 18.142787 8.1533101 18.652548 8.5212841 19.119141 8.9003906 C 20.061921 9.6663999 20.83091 10.468324 21.34375 11.109375 C 21.60017 11.4299 21.792283 11.712179 21.904297 11.908203 C 21.926717 11.947439 21.926155 11.965225 21.939453 12 C 21.926155 12.034775 21.926717 12.052561 21.904297 12.091797 C 21.792283 12.287821 21.60017 12.5701 21.34375 12.890625 C 20.83091 13.531676 20.061921 14.3336 19.119141 15.099609 C 17.233579 16.631628 14.666667 18 12 18 C 10.703231 18 9.4327086 17.672699 8.25 17.164062 L 9.96875 15.445312 A 4 4 0 0 0 12 16 A 4 4 0 0 0 16 12 A 4 4 0 0 0 15.822266 10.824219 A 2 2 0 0 1 14 12 A 2 2 0 0 1 13.482422 11.931641 L 17.601562 7.8125 z "
-                                id="circle2141"
-                                style="fill:#000000;stroke:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none">
-                            </path>
-                        </g>
-                    </g>
-                </svg>
-            </button>
-            <!-- <button class="telegram_send_button">
-                <svg fill="#000000" width="1vw" height="1vw" viewBox="0 0 64 64" data-name="Layer 1" id="Layer_1" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"><title></title><path d="M51.25,59h-27a2,2,0,0,1-2-2V42.5a2,2,0,0,1,4,0V55h23V24.82L43.52,19H26.25V32a2,2,0,0,1-4,0V17a2,2,0,0,1,2-2H44.36a2,2,0,0,1,1.42.6l6.9,7a2,2,0,0,1,.57,1.4V57A2,2,0,0,1,51.25,59Z"></path><path d="M24.25,49H12.75a2,2,0,0,1-2-2V7a2,2,0,0,1,2-2h27a2,2,0,0,1,2,2V17a2,2,0,0,1-2,2H26.25V31a2,2,0,0,1-4,0V17a2,2,0,0,1,2-2h13.5V9h-23V45h7.5V43.14a2,2,0,0,1,4,0V47A2,2,0,0,1,24.25,49Z"></path></g></svg>
-            </button> -->
-            <button class="telegram_delete_button">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="#000000" width="1vw" height="1vw" viewBox="0 0 24 24">
-                    <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
-                    <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
-                    <g id="SVGRepo_iconCarrier">
-                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path>
-                    </g>
-                </svg>
-            </button>
+            
+            <div class="modal-footer">
+                <button class="btn-primary" id="saveContactBtn">
+                    <i class="fas fa-save"></i>
+                    Save Contact
+                </button>
+                <button class="btn-secondary" id="cancelAddContactBtn">
+                    <i class="fas fa-times"></i>
+                    Cancel
+                </button>
+            </div>
         </div>
     </div>
 
-    <script src="script.js">
-    </script>
+    <!-- Confirm Send Dialog -->
+    <div class="message-modal" id="confirmSendDialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Confirm Send Message</h2>
+                <button class="modal-close" id="closeConfirmSendDialog">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <p style="text-align: center; margin: 15px 0; line-height: 1.6;">
+                    Are you sure you want to send this message?
+                </p>
+                <div id="birdPostWarning" style="display: none; background: rgba(255, 202, 40, 0.1); border-left: 3px solid #FFCA28; padding: 12px; margin: 15px 0; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 13px; color: #FFCA28; text-align: center;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Note:</strong> Sending from outside a Post Office will consume 1 Bird Post item from your inventory.
+                    </p>
+                </div>
+                <div id="costWarning" style="display: none; background: rgba(255, 202, 40, 0.1); border-left: 3px solid #FFCA28; padding: 12px; margin: 15px 0; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 13px; color: #FFCA28; text-align: center;">
+                        <i class="fas fa-coins"></i>
+                        <strong>Cost:</strong> Sending this message will cost $<span id="letterCost">0.00</span>.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn-primary" id="confirmSendBtn">
+                    <i class="fas fa-paper-plane"></i>
+                    Send Message
+                </button>
+                <button class="btn-secondary" id="cancelSendBtn">
+                    <i class="fas fa-times"></i>
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message View Modal -->
+    <div class="message-modal" id="messageModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Message Details</h2>
+                <button class="modal-close" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="message-info">
+                    <div class="info-row">
+                        <span class="info-label">From:</span>
+                        <span class="info-value" id="modalSender"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">To:</span>
+                        <span class="info-value" id="modalRecipient"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span class="info-value" id="modalDate"></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Subject:</span>
+                        <span class="info-value" id="modalSubject"></span>
+                    </div>
+                </div>
+                
+                <div class="message-content">
+                    <p id="modalMessage"></p>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button class="btn-danger" id="deleteMessageBtn">
+                    <i class="fas fa-trash"></i>
+                    Delete
+                </button>
+                <button class="btn-secondary" id="closeModalBtn">
+                    <i class="fas fa-times"></i>
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 
 </html>
