@@ -27,7 +27,8 @@ files {
     'html/ui.html',
     'html/style.css',
     'html/script.js',
-    'html/*.png'
+    'html/*.png',
+    'html/assets/*'
 }
 
 dependencies {

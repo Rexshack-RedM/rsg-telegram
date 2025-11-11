@@ -53,6 +53,8 @@
     "cl_delivery_fail3": "You can retrieve the letter from the local Post Office!",
     "cl_message_prefix": "Bird Post",
     "cl_send_receiving": "You can't write a letter while you're waiting for incoming Bird Post!",
+    "cl_no_birdpost_item": "You need a Bird Post item to send messages outside post offices!",
+    "cl_bird_attached": "Bird attached to you. You can now write your message.",
 
     "sv_title_38": "Success",
     "sv_title_39": "Error",
@@ -66,7 +68,9 @@
     "sv_letter_delivered_suc": "successfully!",
     "sv_delete_success": "Message deleted successfully!",
     "sv_command" : "Your Personal Addressbook",
+    "sv_command_telegram" : "Open Telegram Interface",
     "sv_already_exists" : "This person already exists in your address book!",
+    "sv_invalid_recipient": "Invalid recipient! Player not found.",
 
     "message": "Write your message here!",
     "wait_between_send": "Please wait",
