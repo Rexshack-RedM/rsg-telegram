@@ -2,6 +2,175 @@ local RSGCore = exports['rsg-core']:GetCoreObject()
 
 lib.locale()
 
+-- Job mailbox constants keep the new feature isolated from the existing personal inbox flow.
+local PERSONAL_MAILBOX = 'personal'
+local JOB_MAILBOX = 'job'
+
+-- Normalizes configured aliases so "Sheriff", " sheriff ", and "sheriff" resolve the same way.
+local function NormalizeJobAlias(value)
+    if type(value) ~= 'string' then return nil end
+    return value:lower():gsub('^%s+', ''):gsub('%s+$', '')
+end
+
+-- Returns the configured job recipient for an alias entered instead of a citizen id.
+local function GetJobRecipient(alias)
+    if not Config.EnableJobMailboxes then return nil, nil end
+
+    local normalizedAlias = NormalizeJobAlias(alias)
+    if not normalizedAlias or not Config.JobRecipients then return nil, nil end
+
+    for recipientAlias, recipientConfig in pairs(Config.JobRecipients) do
+        if NormalizeJobAlias(recipientAlias) == normalizedAlias then
+            return recipientAlias, recipientConfig
+        end
+    end
+
+    return nil, nil
+end
+
+-- Looks up a job type from either the player's saved job data or the shared job definition.
+local function GetJobType(jobData)
+    if not jobData or not jobData.name then return nil end
+
+    if jobData.type then
+        return jobData.type
+    end
+
+    local sharedJob = RSGCore.Shared.Jobs[jobData.name]
+    return sharedJob and sharedJob.type or nil
+end
+
+-- Checks whether a saved or online player job matches a job recipient rule.
+local function DoesJobMatchJobRecipient(jobData, recipientConfig)
+    if not jobData or not recipientConfig then return false end
+
+    if recipientConfig.jobType and GetJobType(jobData) == recipientConfig.jobType then
+        return true
+    end
+
+    if recipientConfig.jobs then
+        for _, jobName in ipairs(recipientConfig.jobs) do
+            if jobData.name == jobName then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+-- Validates that the sending player can send as the selected job mailbox.
+local function GetJobSenderForPlayer(player, alias)
+    local normalizedAlias = NormalizeJobAlias(alias)
+    if not player or not normalizedAlias or not Config.EnableJobMailboxes or not Config.JobRecipients then return nil, nil end
+
+    for recipientAlias, recipientConfig in pairs(Config.JobRecipients) do
+        if NormalizeJobAlias(recipientAlias) == normalizedAlias and DoesJobMatchJobRecipient(player.PlayerData.job, recipientConfig) then
+            return recipientAlias, recipientConfig
+        end
+    end
+
+    return nil, nil
+end
+
+-- Resolves the stored sender identity, allowing eligible players to send from their job mailbox.
+local function ResolveSenderIdentity(src, player, sender, sendername, jobSenderAlias)
+    if not jobSenderAlias or jobSenderAlias == '' then
+        return sender, sendername
+    end
+
+    local alias, senderConfig = GetJobSenderForPlayer(player, jobSenderAlias)
+    if not alias then
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_cannot_send_from_job'), type = 'error', duration = 5000 })
+        return nil, nil
+    end
+
+    return alias, senderConfig.label or alias
+end
+
+-- Finds all current characters whose job matches the configured job recipient.
+local function GetJobRecipientPlayers(recipientConfig)
+    local recipients = {}
+    local seenCitizenIds = {}
+    local savedPlayers = MySQL.query.await('SELECT citizenid, charinfo, job FROM players') or {}
+
+    for _, row in ipairs(savedPlayers) do
+        local jobData = row.job and json.decode(row.job) or nil
+
+        if DoesJobMatchJobRecipient(jobData, recipientConfig) then
+            local charinfo = row.charinfo and json.decode(row.charinfo) or {}
+            local fullName = ((charinfo.firstname or '') .. ' ' .. (charinfo.lastname or '')):gsub('^%s+', ''):gsub('%s+$', '')
+
+            recipients[#recipients + 1] = {
+                citizenid = row.citizenid,
+                name = fullName ~= '' and fullName or row.citizenid
+            }
+            seenCitizenIds[row.citizenid] = true
+        end
+    end
+
+    -- Online PlayerData is treated as authoritative in case the job changed after the last database save.
+    for _, playerId in ipairs(RSGCore.Functions.GetPlayers()) do
+        local onlinePlayer = RSGCore.Functions.GetPlayer(playerId)
+
+        if onlinePlayer and DoesJobMatchJobRecipient(onlinePlayer.PlayerData.job, recipientConfig) then
+            local citizenid = onlinePlayer.PlayerData.citizenid
+
+            if not seenCitizenIds[citizenid] then
+                recipients[#recipients + 1] = {
+                    citizenid = citizenid,
+                    name = onlinePlayer.PlayerData.charinfo.firstname .. ' ' .. onlinePlayer.PlayerData.charinfo.lastname
+                }
+                seenCitizenIds[citizenid] = true
+            end
+        end
+    end
+
+    return recipients
+end
+
+-- Notifies currently online recipients and updates their unread count after a job telegram is created.
+local function NotifyJobRecipients(recipients)
+    for _, recipient in ipairs(recipients) do
+        local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(recipient.citizenid)
+
+        if targetPlayer then
+            local state = Player(targetPlayer.PlayerData.source).state
+            state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) + 1
+
+            TriggerClientEvent('ox_lib:notify', targetPlayer.PlayerData.source, {
+                title = locale('sv_job_mail_title'),
+                description = locale('sv_job_mail_received'),
+                type = 'info',
+                duration = 10000
+            })
+        end
+    end
+end
+
+-- Inserts one job telegram per matching character so read/delete state remains personal per recipient.
+local function SendJobTelegram(src, sender, sendername, alias, recipientConfig, subject, message, fromPostOffice, pickedUp)
+    local recipients = GetJobRecipientPlayers(recipientConfig)
+
+    if #recipients == 0 then
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_no_job_recipients'), type = 'error', duration = 5000 })
+        return false
+    end
+
+    local sentDate = os.date('%x')
+    local recipientLabel = recipientConfig.label or alias
+
+    for _, recipient in ipairs(recipients) do
+        exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`, `fromPostOffice`, `pickedUp`, `mailbox`, `jobTarget`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
+            {recipient.citizenid, recipientLabel, sender, sendername, subject, sentDate, message, fromPostOffice, pickedUp, JOB_MAILBOX, alias})
+    end
+
+    NotifyJobRecipients(recipients)
+    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale('sv_job_telegram_sent', recipientLabel), type = 'success', duration = 5000 })
+
+    return true, recipientLabel, recipients
+end
+
 -- Make Bird Post as a Usable Item
 RSGCore.Functions.CreateUseableItem(Config.BirdPostItem, function(source)
     TriggerClientEvent('rsg-telegram:client:WriteMessage', source)
@@ -15,11 +184,35 @@ end)
 
 -- Add Message to the Database
 RegisterServerEvent('rsg-telegram:server:SendMessage')
-AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, sendername, tgtid, subject, message)
+AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, sendername, tgtid, subject, message, jobSenderAlias)
     local src = source
     local RSGPlayer = RSGCore.Functions.GetPlayer(src)
 
     if RSGPlayer == nil then return end
+
+    sender, sendername = ResolveSenderIdentity(src, RSGPlayer, sender, sendername, jobSenderAlias)
+    if not sender then return end
+
+    local jobAlias, jobRecipient = GetJobRecipient(tgtid)
+    if jobRecipient then
+        local cost = Config.CostPerLetter
+        local cashBalance = RSGPlayer.PlayerData.money['cash']
+
+        -- Legacy send support keeps older menus compatible with configured job aliases.
+        if Config.ChargePlayer and cashBalance < cost then
+            TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_insufficient_balance'), type = 'error', duration = 5000 })
+            return
+        end
+
+        local sent = SendJobTelegram(src, sender, sendername, jobAlias, jobRecipient, subject, message, 0, 1)
+
+        if sent and Config.ChargePlayer then
+            RSGPlayer.Functions.RemoveMoney('cash', cost, 'send job telegram')
+        end
+
+        return
+    end
+
     -- local _tgtid = tonumber(tgtid)
     local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(tgtid)
     if targetPlayer == nil then
@@ -55,15 +248,19 @@ AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, se
 end)
 
 RegisterServerEvent('rsg-telegram:server:SendMessagePostOffice')
-AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, sendername, citizenid, subject, message)
+AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, sendername, citizenid, subject, message, jobSenderAlias)
     local src = source
     local RSGPlayer = RSGCore.Functions.GetPlayer(src)
     local cost = Config.CostPerLetter
     local cashBalance = RSGPlayer.PlayerData.money['cash']
     local sentDate = os.date('%x')
+    local jobAlias, jobRecipient = GetJobRecipient(citizenid)
+
+    sender, sendername = ResolveSenderIdentity(src, RSGPlayer, sender, sendername, jobSenderAlias)
+    if not sender then return end
 
     -- Check if trying to send to self (unless allowed in config)
-    if sender == citizenid and not Config.AllowSendToSelf then
+    if not jobRecipient and sender == citizenid and not Config.AllowSendToSelf then
         TriggerClientEvent('ox_lib:notify', src, {
             title = locale("sv_title_39"), 
             description = locale('sv_send_to_self'), 
@@ -75,6 +272,17 @@ AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, se
 
     if Config.ChargePlayer and cashBalance < cost then
         TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_insufficient_balance'), type = 'error', duration = 5000 })
+        return
+    end
+
+    -- Job aliases are handled before citizen-id validation so values like "sheriff" can be used as recipients.
+    if jobRecipient then
+        local sent = SendJobTelegram(src, sender, sendername, jobAlias, jobRecipient, subject, message, 1, 0)
+
+        if sent and Config.ChargePlayer then
+            RSGPlayer.Functions.RemoveMoney('cash', cost, 'send job telegram')
+        end
+
         return
     end
 
@@ -105,14 +313,14 @@ AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, se
         state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) + 1
         
         TriggerClientEvent('ox_lib:notify', targetPlayer.PlayerData.source, {
-            title = 'New Telegram',
-            description = 'You have a telegram waiting at the Post Office. Visit any Post Office and press G to pick it up.',
+            title = locale('sv_new_mail_title'),
+            description = locale('sv_post_office_waiting_mail'),
             type = 'info',
             duration = 10000
         })
     end
     
-    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale("sv_letter_delivered", {pName = tFullName}), type = 'success', duration = 5000 })
+    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale('sv_letter_delivered')..' '..tFullName, type = 'success', duration = 5000 })
 
     if Config.ChargePlayer then
         RSGPlayer.Functions.RemoveMoney('cash', cost, 'send telegram')
@@ -121,13 +329,17 @@ end)
 
 -- SEND MESSAGE WITH BIRD POST ITEM (outside post office)
 RegisterServerEvent('rsg-telegram:server:SendMessageWithBirdPost')
-AddEventHandler('rsg-telegram:server:SendMessageWithBirdPost', function(sender, sendername, citizenid, subject, message)
+AddEventHandler('rsg-telegram:server:SendMessageWithBirdPost', function(sender, sendername, citizenid, subject, message, jobSenderAlias)
     local src = source
     local RSGPlayer = RSGCore.Functions.GetPlayer(src)
     local sentDate = os.date('%x')
+    local jobAlias, jobRecipient = GetJobRecipient(citizenid)
+
+    sender, sendername = ResolveSenderIdentity(src, RSGPlayer, sender, sendername, jobSenderAlias)
+    if not sender then return end
 
     -- Check if trying to send to self (unless allowed in config)
-    if sender == citizenid and not Config.AllowSendToSelf then
+    if not jobRecipient and sender == citizenid and not Config.AllowSendToSelf then
         TriggerClientEvent('ox_lib:notify', src, {
             title = locale("sv_title_39"), 
             description = locale('sv_send_to_self'), 
@@ -147,6 +359,16 @@ AddEventHandler('rsg-telegram:server:SendMessageWithBirdPost', function(sender, 
             type = 'error', 
             duration = 5000 
         })
+        return
+    end
+
+    -- Job telegrams sent by bird consume one bird post item and are copied to each matching recipient.
+    if jobRecipient then
+        RSGPlayer.Functions.RemoveItem(Config.BirdPostItem, 1)
+        TriggerClientEvent('rsg-inventory:client:ItemBox', src, RSGCore.Shared.Items[Config.BirdPostItem], 'remove', 1)
+
+        Wait(Config.BirdArrivalDelay)
+        SendJobTelegram(src, sender, sendername, jobAlias, jobRecipient, subject, message, 0, 1)
         return
     end
 
@@ -186,7 +408,7 @@ AddEventHandler('rsg-telegram:server:SendMessageWithBirdPost', function(sender, 
 
     TriggerClientEvent('ox_lib:notify', src, {
         title = locale("sv_title_38"), 
-        description = locale("sv_letter_delivered", {pName = tFullName}), 
+        description = locale('sv_letter_delivered')..' '..tFullName, 
         type = 'success', 
         duration = 5000 
     })
@@ -194,13 +416,17 @@ end)
 
 -- VALIDATE BIRD POST SEND (checks item, then triggers bird spawn)
 RegisterServerEvent('rsg-telegram:server:ValidateBirdPostSend')
-AddEventHandler('rsg-telegram:server:ValidateBirdPostSend', function(sender, sendername, citizenid, subject, message)
+AddEventHandler('rsg-telegram:server:ValidateBirdPostSend', function(sender, sendername, citizenid, subject, message, jobSenderAlias)
     local src = source
     local RSGPlayer = RSGCore.Functions.GetPlayer(src)
     local sentDate = os.date('%x')
+    local jobAlias, jobRecipient = GetJobRecipient(citizenid)
+
+    sender, sendername = ResolveSenderIdentity(src, RSGPlayer, sender, sendername, jobSenderAlias)
+    if not sender then return end
 
     -- Check if trying to send to self (unless allowed in config)
-    if sender == citizenid and not Config.AllowSendToSelf then
+    if not jobRecipient and sender == citizenid and not Config.AllowSendToSelf then
         TriggerClientEvent('ox_lib:notify', src, {
             title = locale("sv_title_39"), 
             description = locale('sv_send_to_self'), 
@@ -220,6 +446,35 @@ AddEventHandler('rsg-telegram:server:ValidateBirdPostSend', function(sender, sen
             type = 'error', 
             duration = 5000 
         })
+        return
+    end
+
+    -- Job bird delivery uses the sender animation, then delivers copies to all matching workers.
+    if jobRecipient then
+        local recipients = GetJobRecipientPlayers(jobRecipient)
+
+        if #recipients == 0 then
+            TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_no_job_recipients'), type = 'error', duration = 5000 })
+            return
+        end
+
+        local targetCoords = vector3(-175.0, 628.0, 114.0)
+        for _, recipient in ipairs(recipients) do
+            local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(recipient.citizenid)
+            if targetPlayer then
+                local targetPed = GetPlayerPed(targetPlayer.PlayerData.source)
+                targetCoords = GetEntityCoords(targetPed)
+                break
+            end
+        end
+
+        RSGPlayer.Functions.RemoveItem(Config.BirdPostItem, 1)
+        TriggerClientEvent('rsg-inventory:client:ItemBox', src, RSGCore.Shared.Items[Config.BirdPostItem], 'remove', 1)
+        TriggerClientEvent('rsg-telegram:client:StartBirdDelivery', src, targetCoords)
+
+        Wait(8000)
+        Wait(Config.BirdArrivalDelay)
+        SendJobTelegram(src, sender, sendername, jobAlias, jobRecipient, subject, message, 0, 1)
         return
     end
 
@@ -271,7 +526,7 @@ AddEventHandler('rsg-telegram:server:ValidateBirdPostSend', function(sender, sen
     -- Notify success
     TriggerClientEvent('ox_lib:notify', src, {
         title = locale("sv_title_38"), 
-        description = locale("sv_letter_delivered", {pName = tFullName}), 
+        description = locale('sv_letter_delivered')..' '..tFullName, 
         type = 'success', 
         duration = 5000 
     })
@@ -287,7 +542,7 @@ AddEventHandler('rsg-telegram:server:CheckInbox', function()
 
     local citizenid = Player.PlayerData.citizenid
 
-    exports.oxmysql:execute('SELECT * FROM telegrams WHERE citizenid = ? AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC',{citizenid}, function(result)
+    exports.oxmysql:execute('SELECT * FROM telegrams WHERE citizenid = ? AND mailbox = ? AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC',{citizenid, PERSONAL_MAILBOX}, function(result)
         local res = {}
 
         res['list'] = result or {}
@@ -455,14 +710,97 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:getInbox', function(source
     -- Otherwise, only show picked up messages
     local query = ''
     if atPostOffice then
-        query = 'SELECT * FROM telegrams WHERE citizenid = ? AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC'
+        query = 'SELECT * FROM telegrams WHERE citizenid = ? AND mailbox = ? AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC'
     else
-        query = 'SELECT * FROM telegrams WHERE citizenid = ? AND pickedUp = 1 AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC'
+        query = 'SELECT * FROM telegrams WHERE citizenid = ? AND mailbox = ? AND pickedUp = 1 AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC'
     end
     
-    exports.oxmysql:execute(query, {citizenid}, function(result)
+    exports.oxmysql:execute(query, {citizenid, PERSONAL_MAILBOX}, function(result)
         cb(result or {})
     end)
+end)
+
+-- Get Job Inbox Messages
+RSGCore.Functions.CreateCallback('rsg-telegram:server:getJobInbox', function(source, cb, atPostOffice)
+    local src = source
+    local Player = RSGCore.Functions.GetPlayer(src)
+
+    -- When job mailboxes are disabled, the UI receives an empty mailbox and aliases are ignored.
+    if not Config.EnableJobMailboxes then
+        cb({})
+        return
+    end
+    
+    if Player == nil then
+        cb({})
+        return
+    end
+
+    local citizenid = Player.PlayerData.citizenid
+    
+    -- Job messages use their own mailbox but keep the same post-office pickup behavior.
+    local query = ''
+    if atPostOffice then
+        query = 'SELECT * FROM telegrams WHERE citizenid = ? AND mailbox = ? AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC'
+    else
+        query = 'SELECT * FROM telegrams WHERE citizenid = ? AND mailbox = ? AND pickedUp = 1 AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC'
+    end
+    
+    exports.oxmysql:execute(query, {citizenid, JOB_MAILBOX}, function(result)
+        cb(result or {})
+    end)
+end)
+
+-- Get configured job recipients for the compose dropdown.
+RSGCore.Functions.CreateCallback('rsg-telegram:server:getJobRecipients', function(source, cb)
+    local recipients = {}
+
+    if Config.EnableJobMailboxes and Config.JobRecipients then
+        for alias, recipientConfig in pairs(Config.JobRecipients) do
+            -- Only expose job aliases in the compose dropdown when the config explicitly allows it.
+            if recipientConfig.showInRecipientList then
+                recipients[#recipients + 1] = {
+                    citizenid = alias,
+                    name = recipientConfig.label or alias,
+                    job = true
+                }
+            end
+        end
+    end
+
+    table.sort(recipients, function(a, b)
+        return a.name < b.name
+    end)
+
+    cb(recipients)
+end)
+
+-- Get job mailboxes the current player is allowed to send from.
+RSGCore.Functions.CreateCallback('rsg-telegram:server:getJobSenders', function(source, cb)
+    local src = source
+    local Player = RSGCore.Functions.GetPlayer(src)
+    local senders = {}
+
+    if not Player or not Config.EnableJobMailboxes or not Config.JobRecipients then
+        cb(senders)
+        return
+    end
+
+    for alias, recipientConfig in pairs(Config.JobRecipients) do
+        -- A player may send as a job mailbox only when the config exposes it and their current job matches that mailbox rule.
+        if recipientConfig.showInSenderList and DoesJobMatchJobRecipient(Player.PlayerData.job, recipientConfig) then
+            senders[#senders + 1] = {
+                alias = alias,
+                label = recipientConfig.label or alias
+            }
+        end
+    end
+
+    table.sort(senders, function(a, b)
+        return a.label < b.label
+    end)
+
+    cb(senders)
 end)
 
 -- Check for waiting messages at post office
@@ -507,7 +845,7 @@ AddEventHandler('rsg-telegram:server:pickupMessages', function()
             lib.notify({
                 id = src,
                 title = locale("sv_title_38"),
-                description = 'You picked up ' .. #messages .. ' telegram(s) from the post office.',
+                description = locale('sv_picked_up_mail', #messages),
                 type = 'success',
                 duration = 5000
             })
@@ -515,7 +853,7 @@ AddEventHandler('rsg-telegram:server:pickupMessages', function()
             lib.notify({
                 id = src,
                 title = locale("sv_title_39"),
-                description = 'No telegrams waiting for pickup.',
+                description = locale('sv_no_waiting_mail'),
                 type = 'info',
                 duration = 5000
             })

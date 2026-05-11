@@ -21,6 +21,70 @@ local birdTime = Config.BirdTimeout
 local blipEntries = {}
 local isAtPostOffice = false
 
+-- Builds the NUI label table from ox_lib locales before sending it to the browser.
+local function BuildUiLabels()
+    return {
+        ui_page_title = locale('ui_page_title'),
+        ui_header_title = locale('ui_header_title'),
+        ui_inbox = locale('ui_inbox'),
+        ui_job_inbox = locale('ui_job_inbox'),
+        ui_new_message = locale('ui_new_message'),
+        ui_addressbook = locale('ui_addressbook'),
+        ui_search_messages = locale('ui_search_messages'),
+        ui_search_job_messages = locale('ui_search_job_messages'),
+        ui_clear_search = locale('ui_clear_search'),
+        ui_sender_label = locale('ui_sender_label'),
+        ui_personal_sender = locale('ui_personal_sender'),
+        ui_recipient_label = locale('ui_recipient_label'),
+        ui_recipient_placeholder = locale('ui_recipient_placeholder'),
+        ui_subject_label = locale('ui_subject_label'),
+        ui_subject_placeholder = locale('ui_subject_placeholder'),
+        ui_message_label = locale('ui_message_label'),
+        ui_message_placeholder = locale('ui_message_placeholder'),
+        ui_send_message = locale('ui_send_message'),
+        ui_clear = locale('ui_clear'),
+        ui_add_new_contact = locale('ui_add_new_contact'),
+        ui_contact_name_label = locale('ui_contact_name_label'),
+        ui_contact_name_placeholder = locale('ui_contact_name_placeholder'),
+        ui_contact_citizenid_label = locale('ui_contact_citizenid_label'),
+        ui_contact_citizenid_placeholder = locale('ui_contact_citizenid_placeholder'),
+        ui_save_contact = locale('ui_save_contact'),
+        ui_cancel = locale('ui_cancel'),
+        ui_confirm_send_title = locale('ui_confirm_send_title'),
+        ui_confirm_send_text = locale('ui_confirm_send_text'),
+        ui_note_label = locale('ui_note_label'),
+        ui_birdpost_warning = locale('ui_birdpost_warning'),
+        ui_cost_label = locale('ui_cost_label'),
+        ui_cost_warning = locale('ui_cost_warning'),
+        ui_message_details = locale('ui_message_details'),
+        ui_from_label = locale('ui_from_label'),
+        ui_to_label = locale('ui_to_label'),
+        ui_date_label = locale('ui_date_label'),
+        ui_reply = locale('ui_reply'),
+        ui_delete = locale('ui_delete'),
+        ui_close = locale('ui_close'),
+        ui_empty_inbox = locale('ui_empty_inbox'),
+        ui_empty_job_inbox = locale('ui_empty_job_inbox'),
+        ui_at_post_office = locale('ui_at_post_office'),
+        ui_job_badge = locale('ui_job_badge'),
+        ui_empty_addressbook = locale('ui_empty_addressbook'),
+        ui_citizenid_display = locale('ui_citizenid_display'),
+        ui_remove_contact = locale('ui_remove_contact'),
+        ui_reply_subject_prefix = locale('ui_reply_subject_prefix')
+    }
+end
+
+-- Centralizes NUI open payload so every entry point receives the same localized UI data.
+local function OpenTelegramUiPayload(extraData)
+    local payload = extraData or {}
+    payload.action = 'openUI'
+    payload.enableJobMailboxes = Config.EnableJobMailboxes
+    payload.personalSenderDisplay = Config.PersonalSenderDisplay
+    payload.jobAliases = Config.JobRecipients or {}
+    payload.labels = BuildUiLabels()
+    return payload
+end
+
 -- Check if player is at post office
 local function IsPlayerAtPostOffice()
     local playerPed = PlayerPedId()
@@ -77,7 +141,7 @@ Citizen.CreateThread(function()
         })
         
         -- Prompt to pick up waiting messages
-        exports['rsg-core']:createPrompt(pos.location .. '_pickup', pos.coords, RSGCore.Shared.Keybinds['G'], 'Pick Up Telegrams', {
+        exports['rsg-core']:createPrompt(pos.location .. '_pickup', pos.coords, RSGCore.Shared.Keybinds['G'], locale('cl_pickup_mail_prompt'), {
             type = 'client',
             event = 'rsg-telegram:client:PickupMessages'
         })
@@ -96,9 +160,7 @@ end)
 -- Open Telegram UI
 RegisterNetEvent('rsg-telegram:client:OpenTelegram', function()
     SetNuiFocus(true, true)
-    SendNUIMessage({
-        action = 'openUI'
-    })
+    SendNUIMessage(OpenTelegramUiPayload())
 end)
 
 -- Pick up messages from post office
@@ -107,7 +169,7 @@ RegisterNetEvent('rsg-telegram:client:PickupMessages', function()
     if not IsPlayerAtPostOffice() then
         lib.notify({
             title = locale("cl_title_11"),
-            description = 'You must be at a Post Office to pick up telegrams.',
+            description = locale('cl_must_be_at_post_office'),
             type = 'error',
             duration = 5000
         })
@@ -119,8 +181,8 @@ RegisterNetEvent('rsg-telegram:client:PickupMessages', function()
         if count > 0 then
             -- Show confirmation with count
             lib.notify({
-                title = 'Post Office',
-                description = 'You have ' .. count .. ' telegram(s) waiting. Picking up...',
+                title = locale('cl_post_office_title'),
+                description = locale('cl_waiting_mail_pickup', count),
                 type = 'info',
                 duration = 5000
             })
@@ -130,7 +192,7 @@ RegisterNetEvent('rsg-telegram:client:PickupMessages', function()
         else
             lib.notify({
                 title = locale("cl_title_11"),
-                description = 'No telegrams waiting for pickup.',
+                description = locale('cl_no_waiting_mail'),
                 type = 'info',
                 duration = 5000
             })
@@ -145,7 +207,7 @@ local function Prompts()
     local ped = PlayerPedId()
 
     if destination < Config.BirdPromptDistance and IsPedOnMount(ped) or IsPedOnVehicle(ped) then
-        lib.notify({ title = locale("title_11"), description = locale('cl_player_on_horse'), type = 'error', duration = 7000 })
+        lib.notify({ title = locale("cl_title_11"), description = locale('cl_player_on_horse'), type = 'error', duration = 7000 })
 
         Wait(3000)
         return
@@ -504,11 +566,10 @@ end)
 RegisterNetEvent('rsg-telegram:client:WriteMessage', function()
     -- Open custom UI to new message tab
     SetNuiFocus(true, true)
-    SendNUIMessage({
-        action = 'openUI',
+    SendNUIMessage(OpenTelegramUiPayload({
         defaultTab = 'new-message',
         usingBirdPost = true
-    })
+    }))
 end)
 
 -- Spawn Bird for Sending Message
@@ -521,7 +582,7 @@ RegisterNetEvent('rsg-telegram:client:SpawnBirdForSend', function()
     end
     
     -- Request validation from server (will check item and send callback if valid)
-    TriggerServerEvent('rsg-telegram:server:ValidateBirdPostSend', messageData.sender, messageData.sendername, messageData.recipient, messageData.subject, messageData.message)
+    TriggerServerEvent('rsg-telegram:server:ValidateBirdPostSend', messageData.sender, messageData.sendername, messageData.recipient, messageData.subject, messageData.message, messageData.jobSender)
 end)
 
 -- Server validated bird post send, spawn the bird
@@ -574,7 +635,7 @@ RegisterNetEvent('rsg-telegram:client:StartBirdDelivery', function(targetCoords)
     -- Wait for bird to "pick up" the letter (3 seconds)
     Wait(3000)
     
-    lib.notify({ title = locale("cl_title_13"), description = 'Bird is picking up the letter...', type = 'info', duration = 3000 })
+    lib.notify({ title = locale("cl_title_13"), description = locale('cl_bird_collecting_mail'), type = 'info', duration = 3000 })
     
     -- Step 4: Bird flies away
     FreezeEntityPosition(cuteBird, false)
@@ -750,6 +811,14 @@ RegisterNUICallback('getInbox', function(data, cb)
     end, atPostOffice)
 end)
 
+-- Get Job Inbox Messages
+RegisterNUICallback('getJobInbox', function(data, cb)
+    local atPostOffice = IsPlayerAtPostOffice()
+    RSGCore.Functions.TriggerCallback('rsg-telegram:server:getJobInbox', function(messages)
+        cb(messages or {})
+    end, atPostOffice)
+end)
+
 -- Get Addressbook
 RegisterNUICallback('getAddressbook', function(data, cb)
     RSGCore.Functions.TriggerCallback('rsg-telegram:server:getAddressbook', function(contacts)
@@ -760,7 +829,23 @@ end)
 -- Get All Players for Recipient List
 RegisterNUICallback('getPlayers', function(data, cb)
     RSGCore.Functions.TriggerCallback('rsg-telegram:server:getAddressbook', function(contacts)
-        cb(contacts or {})
+        RSGCore.Functions.TriggerCallback('rsg-telegram:server:getJobRecipients', function(jobRecipients)
+            -- Job recipients are appended to contacts so aliases like "sheriff" can be selected like a normal recipient.
+            local recipients = contacts or {}
+
+            for _, recipient in ipairs(jobRecipients or {}) do
+                recipients[#recipients + 1] = recipient
+            end
+
+            cb(recipients)
+        end)
+    end)
+end)
+
+-- Get job mailboxes this player can use as a sender.
+RegisterNUICallback('getJobSenders', function(data, cb)
+    RSGCore.Functions.TriggerCallback('rsg-telegram:server:getJobSenders', function(senders)
+        cb(senders or {})
     end)
 end)
 
@@ -790,14 +875,15 @@ RegisterNUICallback('sendMessage', function(data, cb)
             sendername = senderfullname,
             recipient = data.recipient,
             subject = data.subject,
-            message = data.message
+            message = data.message,
+            jobSender = data.jobSender
         }
         
         -- Trigger bird spawn event (will check item and spawn bird)
         TriggerEvent('rsg-telegram:client:SpawnBirdForSend')
     else
         -- At post office, send normally without bird
-        TriggerServerEvent('rsg-telegram:server:SendMessagePostOffice', sendertelegram, senderfullname, data.recipient, data.subject, data.message)
+        TriggerServerEvent('rsg-telegram:server:SendMessagePostOffice', sendertelegram, senderfullname, data.recipient, data.subject, data.message, data.jobSender)
     end
     
     cb('ok')
@@ -893,10 +979,9 @@ end)
 RegisterNetEvent('rsg-telegram:client:OpenAddressbook', function()
     -- Open custom UI to addressbook tab
     SetNuiFocus(true, true)
-    SendNUIMessage({
-        action = 'openUI',
+    SendNUIMessage(OpenTelegramUiPayload({
         defaultTab = 'addressbook'
-    })
+    }))
 end)
 
 
@@ -967,7 +1052,7 @@ RegisterNetEvent('rsg-telegram:client:RemovePersonMenu', function()
             end
 
             local input = lib.inputDialog(locale("cl_title_35"), {
-                { type = 'select', options = option, required = true, default = 'Recipient' }
+                { type = 'select', options = option, required = true, default = locale('ui_recipient') }
             })
             if not input then return end
 

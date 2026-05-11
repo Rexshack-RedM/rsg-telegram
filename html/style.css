@@ -179,6 +179,44 @@ body {
     background-color: #AAA;
 }
 
+.telegram-container.compose-mode .telegram-header {
+    margin-bottom: 12px;
+}
+
+.telegram-container.compose-mode .telegram-tabs {
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+}
+
+.telegram-container.compose-mode .telegram-content {
+    max-height: none;
+    overflow-y: hidden;
+    padding: 6px 10px;
+}
+
+.telegram-container.compose-mode .message-form {
+    gap: 8px;
+}
+
+.telegram-container.compose-mode .form-group {
+    gap: 5px;
+}
+
+.telegram-container.compose-mode .form-select,
+.telegram-container.compose-mode .form-input {
+    padding: 9px 14px;
+}
+
+.telegram-container.compose-mode .form-textarea {
+    min-height: 120px;
+    height: 128px;
+    resize: none;
+}
+
+.telegram-container.compose-mode .form-actions {
+    margin-top: 4px;
+}
+
 .inbox-controls {
     display: flex;
     gap: 10px;
@@ -318,6 +356,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    position: relative;
 }
 
 .form-group label {
@@ -364,6 +403,38 @@ body {
     min-height: 150px;
     font-family: "RDR Lino Regular", serif;
     line-height: 1.5;
+}
+
+/* Custom recipient dropdown keeps free typing and selectable suggestions in one field. */
+.recipient-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1100;
+    margin-top: 2px;
+    background: rgba(20, 16, 12, 0.98);
+    border: 1px solid #FFCA28;
+    max-height: 190px;
+    overflow-y: auto;
+}
+
+.recipient-option {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #FFFFFF;
+    padding: 10px 14px;
+    text-align: left;
+    font-family: "RDR Lino Regular", serif;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.recipient-option:hover {
+    background: rgba(255, 202, 40, 0.18);
+    color: #FFCA28;
 }
 
 .form-actions {

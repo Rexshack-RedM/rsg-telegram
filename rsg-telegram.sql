@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS `telegrams` (
   `birdstatus` TINYINT(2) NOT NULL DEFAULT '0',
   `fromPostOffice` TINYINT(1) NOT NULL DEFAULT '0',
   `pickedUp` TINYINT(1) NOT NULL DEFAULT '0',
+  `mailbox` VARCHAR(20) NOT NULL DEFAULT 'personal',
+  `jobTarget` VARCHAR(50) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
