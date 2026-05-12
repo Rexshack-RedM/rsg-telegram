@@ -17,6 +17,58 @@ Config.AllowSendToSelf     = true -- A debug functions to allow sending letter t
 Config.ChargePlayer        = true -- Whether to charge the player when sending a letter
 Config.CostPerLetter       = 0.50 -- Cost for sending a letter
 Config.BirdPostItem        = 'birdpost' -- Item name for the bird post (can be changed to any item name)
+Config.PersonalSenderDisplay = 'name' -- Job mailbox feature: choose personal sender display, either 'name' or 'citizenid'.
+
+-- Job mailbox feature: aliases let players send telegrams to configured job groups instead of a citizen ID.
+Config.EnableJobMailboxes = true -- Enable/disable job recipients, job senders, and the job inbox UI.
+Config.JobRecipients  = {
+    -- Use jobType to target every job that shares the same RSG job type.
+    -- Example: jobType = 'leo' sends to every law-enforcement job with type = 'leo'.
+    law = {
+        label = 'Law Enforcement',
+        jobType = 'leo',
+        showInRecipientList = true,
+        showInSenderList = false
+    },
+    -- Use jobs to target only specific job names.
+    -- This keeps the Valentine law mailbox limited to vallaw instead of every leo job.
+    vallaw = {
+        label = 'Valentine Law Enforcement',
+        jobs = { 'vallaw' },
+        showInRecipientList = true,
+        showInSenderList = true
+    },
+    rholaw = {
+        label = 'Rhodes Law Enforcement',
+        jobs = { 'rholaw' },
+        showInRecipientList = true,
+        showInSenderList = true
+    },
+    blklaw = {
+        label = 'Blackwater Law Enforcement',
+        jobs = { 'blklaw' },
+        showInRecipientList = true,
+        showInSenderList = true
+    },
+    strlaw = {
+        label = 'Strawberry Law Enforcement',
+        jobs = { 'strlaw' },
+        showInRecipientList = true,
+        showInSenderList = true
+    },
+    stdenlaw = {
+        label = 'Saint Denis Law Enforcement',
+        jobs = { 'stdenlaw' },
+        showInRecipientList = true,
+        showInSenderList = true
+    },
+    medic = {
+        label = 'Medic',
+        jobs = { 'medic' },
+        showInRecipientList = true,
+        showInSenderList = true
+    }
+}
 
 -- Bird Post settings
 Config.BirdModel           = 'A_C_Owl_01' -- Bird model to use

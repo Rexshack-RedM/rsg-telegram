@@ -4,224 +4,239 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram System</title>
+    <title data-i18n="ui_page_title"></title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 </head>
 
 <body>
-<body>
-    <!-- Main Telegram Container -->
     <div class="telegram-container" id="telegramContainer">
-        <!-- Header -->
         <div class="telegram-header">
-            <h1 class="telegram-title">Telegraph Office</h1>
+            <h1 class="telegram-title" data-i18n="ui_header_title"></h1>
             <button class="telegram-close" id="closeBtn">
                 <i class="fas fa-times"></i>
             </button>
         </div>
 
-        <!-- Tab Navigation -->
         <div class="telegram-tabs">
             <button class="telegram-tab active" data-tab="inbox">
                 <i class="fas fa-inbox"></i>
-                <span>Inbox</span>
+                <span data-i18n="ui_inbox"></span>
                 <span class="unread-badge" id="unreadBadge" style="display: none;">0</span>
+            </button>
+            <!-- Job mailbox tab is toggled by config from the NUI payload. -->
+            <button class="telegram-tab" data-tab="job-inbox">
+                <i class="fas fa-briefcase"></i>
+                <span data-i18n="ui_job_inbox"></span>
+                <span class="unread-badge" id="jobUnreadBadge" style="display: none;">0</span>
             </button>
             <button class="telegram-tab" data-tab="new-message">
                 <i class="fas fa-pen-to-square"></i>
-                <span>New Message</span>
+                <span data-i18n="ui_new_message"></span>
             </button>
             <button class="telegram-tab" data-tab="addressbook">
                 <i class="fas fa-address-book"></i>
-                <span>Addressbook</span>
+                <span data-i18n="ui_addressbook"></span>
             </button>
         </div>
 
-        <!-- Tab Content -->
         <div class="telegram-content">
-            <!-- Inbox Tab -->
             <div class="tab-panel active" id="inbox">
                 <div class="inbox-controls">
-                    <input type="text" id="searchInput" class="search-input" placeholder="Search messages...">
-                    <button class="control-btn" id="clearSearchBtn" title="Clear Search">
+                    <input type="text" id="searchInput" class="search-input" data-i18n-placeholder="ui_search_messages">
+                    <button class="control-btn" id="clearSearchBtn" data-i18n-title="ui_clear_search">
                         <i class="fas fa-xmark"></i>
                     </button>
                 </div>
-                
-                <div class="inbox-list" id="inboxList">
-                    <!-- Messages will be loaded here -->
-                </div>
+                <div class="inbox-list" id="inboxList"></div>
             </div>
 
-            <!-- New Message Tab -->
+            <!-- Job inbox keeps job telegrams separate from personal telegrams. -->
+            <div class="tab-panel" id="job-inbox">
+                <div class="inbox-controls">
+                    <input type="text" id="jobSearchInput" class="search-input" data-i18n-placeholder="ui_search_job_messages">
+                    <button class="control-btn" id="clearJobSearchBtn" data-i18n-title="ui_clear_search">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="inbox-list" id="jobInboxList"></div>
+            </div>
+
             <div class="tab-panel" id="new-message">
                 <div class="message-form">
-                    <div class="form-group">
-                        <label for="recipientSelect">Recipient:</label>
-                        <select id="recipientSelect" class="form-select">
-                            <option value="">Select Recipient...</option>
+                    <!-- Sender selector appears only when the player can send from a configured job mailbox. -->
+                    <div class="form-group" id="senderGroup" style="display: none;">
+                        <label for="senderSelect" data-i18n="ui_sender_label"></label>
+                        <select id="senderSelect" class="form-select">
+                            <option value="" data-i18n="ui_personal_sender"></option>
                         </select>
                     </div>
-                    
+
                     <div class="form-group">
-                        <label for="subjectInput">Subject:</label>
-                        <input type="text" id="subjectInput" class="form-input" placeholder="Enter subject...">
+                        <label for="recipientSelect" data-i18n="ui_recipient_label"></label>
+                        <!-- Recipient combobox supports manual citizen IDs plus contact/job suggestions. -->
+                        <input type="text" id="recipientSelect" class="form-input" data-i18n-placeholder="ui_recipient_placeholder">
+                        <datalist id="recipientOptions" style="display: none;"></datalist>
+                        <div id="recipientDropdown" class="recipient-dropdown"></div>
                     </div>
-                    
+
                     <div class="form-group">
-                        <label for="messageInput">Message:</label>
-                        <textarea id="messageInput" class="form-textarea" rows="8" placeholder="Write your message..."></textarea>
+                        <label for="subjectInput" data-i18n="ui_subject_label"></label>
+                        <input type="text" id="subjectInput" class="form-input" data-i18n-placeholder="ui_subject_placeholder">
                     </div>
-                    
+
+                    <div class="form-group">
+                        <label for="messageInput" data-i18n="ui_message_label"></label>
+                        <textarea id="messageInput" class="form-textarea" rows="8" data-i18n-placeholder="ui_message_placeholder"></textarea>
+                    </div>
+
                     <div class="form-actions">
                         <button class="btn-primary" id="sendMessageBtn">
                             <i class="fas fa-paper-plane"></i>
-                            Send Message
+                            <span data-i18n="ui_send_message"></span>
                         </button>
                         <button class="btn-secondary" id="clearFormBtn">
                             <i class="fas fa-eraser"></i>
-                            Clear
+                            <span data-i18n="ui_clear"></span>
                         </button>
                     </div>
                 </div>
             </div>
 
-            <!-- Addressbook Tab -->
             <div class="tab-panel" id="addressbook">
                 <div class="addressbook-controls">
                     <button class="btn-primary" id="addContactBtn">
                         <i class="fas fa-user-plus"></i>
-                        Add New Contact
+                        <span data-i18n="ui_add_new_contact"></span>
                     </button>
                 </div>
-                
-                <div class="addressbook-list" id="addressbookList">
-                    <!-- Contacts will be loaded here -->
-                </div>
+                <div class="addressbook-list" id="addressbookList"></div>
             </div>
         </div>
     </div>
 
-    <!-- Add Contact Modal -->
     <div class="message-modal" id="addContactModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Add New Contact</h2>
+                <h2 data-i18n="ui_add_new_contact"></h2>
                 <button class="modal-close" id="closeAddContactModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            
+
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="contactName">Contact Name:</label>
-                    <input type="text" id="contactName" class="form-input" placeholder="Enter contact name...">
+                    <label for="contactName" data-i18n="ui_contact_name_label"></label>
+                    <input type="text" id="contactName" class="form-input" data-i18n-placeholder="ui_contact_name_placeholder">
                 </div>
                 <div class="form-group">
-                    <label for="contactCitizenId">Citizen ID:</label>
-                    <input type="text" id="contactCitizenId" class="form-input" placeholder="Enter citizen ID...">
+                    <label for="contactCitizenId" data-i18n="ui_contact_citizenid_label"></label>
+                    <input type="text" id="contactCitizenId" class="form-input" data-i18n-placeholder="ui_contact_citizenid_placeholder">
                 </div>
             </div>
-            
+
             <div class="modal-footer">
                 <button class="btn-primary" id="saveContactBtn">
                     <i class="fas fa-save"></i>
-                    Save Contact
+                    <span data-i18n="ui_save_contact"></span>
                 </button>
                 <button class="btn-secondary" id="cancelAddContactBtn">
                     <i class="fas fa-times"></i>
-                    Cancel
+                    <span data-i18n="ui_cancel"></span>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Confirm Send Dialog -->
     <div class="message-modal" id="confirmSendDialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Confirm Send Message</h2>
+                <h2 data-i18n="ui_confirm_send_title"></h2>
                 <button class="modal-close" id="closeConfirmSendDialog">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            
+
             <div class="modal-body">
-                <p style="text-align: center; margin: 15px 0; line-height: 1.6;">
-                    Are you sure you want to send this message?
-                </p>
+                <p style="text-align: center; margin: 15px 0; line-height: 1.6;" data-i18n="ui_confirm_send_text"></p>
                 <div id="birdPostWarning" style="display: none; background: rgba(255, 202, 40, 0.1); border-left: 3px solid #FFCA28; padding: 12px; margin: 15px 0; border-radius: 4px;">
                     <p style="margin: 0; font-size: 13px; color: #FFCA28; text-align: center;">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <strong>Note:</strong> Sending from outside a Post Office will consume 1 Bird Post item from your inventory.
+                        <strong data-i18n="ui_note_label"></strong>
+                        <span data-i18n="ui_birdpost_warning"></span>
                     </p>
                 </div>
                 <div id="costWarning" style="display: none; background: rgba(255, 202, 40, 0.1); border-left: 3px solid #FFCA28; padding: 12px; margin: 15px 0; border-radius: 4px;">
                     <p style="margin: 0; font-size: 13px; color: #FFCA28; text-align: center;">
                         <i class="fas fa-coins"></i>
-                        <strong>Cost:</strong> Sending this message will cost $<span id="letterCost">0.00</span>.
+                        <strong data-i18n="ui_cost_label"></strong>
+                        <span data-i18n="ui_cost_warning"></span>
+                        <span id="letterCost">0.00</span>.
                     </p>
                 </div>
             </div>
-            
+
             <div class="modal-footer">
                 <button class="btn-primary" id="confirmSendBtn">
                     <i class="fas fa-paper-plane"></i>
-                    Send Message
+                    <span data-i18n="ui_send_message"></span>
                 </button>
                 <button class="btn-secondary" id="cancelSendBtn">
                     <i class="fas fa-times"></i>
-                    Cancel
+                    <span data-i18n="ui_cancel"></span>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Message View Modal -->
     <div class="message-modal" id="messageModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Message Details</h2>
+                <h2 data-i18n="ui_message_details"></h2>
                 <button class="modal-close" id="closeModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            
+
             <div class="modal-body">
                 <div class="message-info">
                     <div class="info-row">
-                        <span class="info-label">From:</span>
+                        <span class="info-label" data-i18n="ui_from_label"></span>
                         <span class="info-value" id="modalSender"></span>
                     </div>
                     <div class="info-row">
-                        <span class="info-label">To:</span>
+                        <span class="info-label" data-i18n="ui_to_label"></span>
                         <span class="info-value" id="modalRecipient"></span>
                     </div>
                     <div class="info-row">
-                        <span class="info-label">Date:</span>
+                        <span class="info-label" data-i18n="ui_date_label"></span>
                         <span class="info-value" id="modalDate"></span>
                     </div>
                     <div class="info-row">
-                        <span class="info-label">Subject:</span>
+                        <span class="info-label" data-i18n="ui_subject_label"></span>
                         <span class="info-value" id="modalSubject"></span>
                     </div>
                 </div>
-                
+
                 <div class="message-content">
                     <p id="modalMessage"></p>
                 </div>
             </div>
-            
+
             <div class="modal-footer">
+                <!-- Reply reuses the current mailbox context, including job sender identity when applicable. -->
+                <button class="btn-secondary" id="replyMessageBtn">
+                    <i class="fas fa-reply"></i>
+                    <span data-i18n="ui_reply"></span>
+                </button>
                 <button class="btn-danger" id="deleteMessageBtn">
                     <i class="fas fa-trash"></i>
-                    Delete
+                    <span data-i18n="ui_delete"></span>
                 </button>
                 <button class="btn-secondary" id="closeModalBtn">
                     <i class="fas fa-times"></i>
-                    Close
+                    <span data-i18n="ui_close"></span>
                 </button>
             </div>
         </div>
