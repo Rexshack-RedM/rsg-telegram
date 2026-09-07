@@ -12,7 +12,7 @@ Config.BirdAttach          = {
 }
 
 -- General Settings
-Config.Debug               = true -- Dnable/disable debug functions
+Config.Debug               = false -- Enable/disable debug functions (leave off in production, spams console)
 Config.AllowSendToSelf     = true -- A debug functions to allow sending letter to ourself (testing purpose)
 Config.ChargePlayer        = true -- Whether to charge the player when sending a letter
 Config.CostPerLetter       = 0.50 -- Cost for sending a letter

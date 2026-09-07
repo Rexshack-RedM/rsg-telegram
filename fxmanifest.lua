@@ -3,7 +3,7 @@ rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aw
 game 'rdr3'
 
 description 'rsg-telegram'
-version '2.1.0'
+version '2.1.1'
 
 shared_scripts {
     '@ox_lib/init.lua',
@@ -25,10 +25,7 @@ ui_page('html/ui.html')
 files {
     'locales/*.json',
     'html/ui.html',
-    'html/style.css',
-    'html/script.js',
-    'html/*.png',
-    'html/assets/*'
+    'html/_next/**/*',
 }
 
 dependencies {

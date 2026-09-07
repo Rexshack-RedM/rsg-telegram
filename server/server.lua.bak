@@ -73,24 +73,19 @@ local function GetJobSenderForPlayer(player, alias)
     return nil, nil
 end
 
--- Resolves the authoritative sender identity for a telegram: either the player's own
--- citizenid/name, or (when a valid jobSenderAlias is supplied) their job mailbox identity.
--- The client-supplied sender/sendername are intentionally ignored here - trusting them let a
--- modified client impersonate any citizenid and defeat the "no send to self" check.
-local function ResolveSenderIdentity(src, player, jobSenderAlias)
-    if jobSenderAlias and jobSenderAlias ~= '' then
-        local alias, senderConfig = GetJobSenderForPlayer(player, jobSenderAlias)
-        if not alias then
-            TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_cannot_send_from_job'), type = 'error', duration = 5000 })
-            return nil, nil
-        end
-        return alias, senderConfig.label or alias
+-- Resolves the stored sender identity, allowing eligible players to send from their job mailbox.
+local function ResolveSenderIdentity(src, player, sender, sendername, jobSenderAlias)
+    if not jobSenderAlias or jobSenderAlias == '' then
+        return sender, sendername
     end
 
-    local charinfo = player.PlayerData.charinfo or {}
-    local fullname = ((charinfo.firstname or '') .. ' ' .. (charinfo.lastname or '')):gsub('^%s+', ''):gsub('%s+$', '')
-    local citizenid = player.PlayerData.citizenid
-    return citizenid, fullname ~= '' and fullname or citizenid
+    local alias, senderConfig = GetJobSenderForPlayer(player, jobSenderAlias)
+    if not alias then
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_cannot_send_from_job'), type = 'error', duration = 5000 })
+        return nil, nil
+    end
+
+    return alias, senderConfig.label or alias
 end
 
 -- Finds all current characters whose job matches the configured job recipient.
@@ -181,18 +176,87 @@ RSGCore.Functions.CreateUseableItem(Config.BirdPostItem, function(source)
     TriggerClientEvent('rsg-telegram:client:WriteMessage', source)
 end)
 
-RegisterServerEvent('rsg-telegram:server:SendMessagePostOffice')
-AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(_clientSender, _clientSenderName, citizenid, subject, message, jobSenderAlias)
+-- Delivery Success
+RegisterNetEvent('rsg-telegram:server:DeliverySuccess')
+AddEventHandler('rsg-telegram:server:DeliverySuccess', function(sID, tPName)
+    TriggerClientEvent('ox_lib:notify', sID, {title = locale("sv_title_38"), description = locale('sv_letter_delivered')..' '..tPName..' '..locale('sv_letter_delivered_suc'), type = 'success', duration = 5000 })
+end)
+
+-- Add Message to the Database
+RegisterServerEvent('rsg-telegram:server:SendMessage')
+AddEventHandler('rsg-telegram:server:SendMessage', function(senderID, sender, sendername, tgtid, subject, message, jobSenderAlias)
     local src = source
     local RSGPlayer = RSGCore.Functions.GetPlayer(src)
+
     if RSGPlayer == nil then return end
 
+    sender, sendername = ResolveSenderIdentity(src, RSGPlayer, sender, sendername, jobSenderAlias)
+    if not sender then return end
+
+    local jobAlias, jobRecipient = GetJobRecipient(tgtid)
+    if jobRecipient then
+        local cost = Config.CostPerLetter
+        local cashBalance = RSGPlayer.PlayerData.money['cash']
+
+        -- Legacy send support keeps older menus compatible with configured job aliases.
+        if Config.ChargePlayer and cashBalance < cost then
+            TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_insufficient_balance'), type = 'error', duration = 5000 })
+            return
+        end
+
+        local sent = SendJobTelegram(src, sender, sendername, jobAlias, jobRecipient, subject, message, 0, 1)
+
+        if sent and Config.ChargePlayer then
+            RSGPlayer.Functions.RemoveMoney('cash', cost, 'send job telegram')
+        end
+
+        return
+    end
+
+    -- local _tgtid = tonumber(tgtid)
+    local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(tgtid)
+    if targetPlayer == nil then
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_player_unavailable'), type = 'error', duration = 5000 })
+        return
+    end
+
+    if not Config.AllowSendToSelf and RSGPlayer.PlayerData.citizenid == tgtid then
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_send_to_self'), type = 'error', duration = 5000 })
+        return
+    end
+
+    local _citizenid = targetPlayer.PlayerData.citizenid
+    local targetPlayerName = targetPlayer.PlayerData.charinfo.firstname..' '..targetPlayer.PlayerData.charinfo.lastname
+    local cost = Config.CostPerLetter
+    local cashBalance = RSGPlayer.PlayerData.money['cash']
+    local sentDate = os.date('%x')
+
+    if Config.ChargePlayer and cashBalance < cost then
+        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_insufficient_balance'), type = 'error', duration = 5000 })
+        return
+    end
+
+    exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`) VALUES (?, ?, ?, ?, ?, ?, ?)',{_citizenid, targetPlayerName, sender, sendername, subject, sentDate, message})
+    local state = Player(targetPlayer.PlayerData.source).state
+    state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) + 1
+    
+    TriggerClientEvent('rsg-telegram:client:ReceiveMessage', targetPlayer.PlayerData.source, senderID, targetPlayerName)
+
+    if Config.ChargePlayer then
+        RSGPlayer.Functions.RemoveMoney('cash', cost, 'send-post')
+    end
+end)
+
+RegisterServerEvent('rsg-telegram:server:SendMessagePostOffice')
+AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(sender, sendername, citizenid, subject, message, jobSenderAlias)
+    local src = source
+    local RSGPlayer = RSGCore.Functions.GetPlayer(src)
     local cost = Config.CostPerLetter
     local cashBalance = RSGPlayer.PlayerData.money['cash']
     local sentDate = os.date('%x')
     local jobAlias, jobRecipient = GetJobRecipient(citizenid)
 
-    local sender, sendername = ResolveSenderIdentity(src, RSGPlayer, jobSenderAlias)
+    sender, sendername = ResolveSenderIdentity(src, RSGPlayer, sender, sendername, jobSenderAlias)
     if not sender then return end
 
     -- Check if trying to send to self (unless allowed in config)
@@ -263,17 +327,102 @@ AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(_clientSen
     end
 end)
 
--- VALIDATE BIRD POST SEND (checks item, then triggers bird spawn)
-RegisterServerEvent('rsg-telegram:server:ValidateBirdPostSend')
-AddEventHandler('rsg-telegram:server:ValidateBirdPostSend', function(_clientSender, _clientSenderName, citizenid, subject, message, jobSenderAlias)
+-- SEND MESSAGE WITH BIRD POST ITEM (outside post office)
+RegisterServerEvent('rsg-telegram:server:SendMessageWithBirdPost')
+AddEventHandler('rsg-telegram:server:SendMessageWithBirdPost', function(sender, sendername, citizenid, subject, message, jobSenderAlias)
     local src = source
     local RSGPlayer = RSGCore.Functions.GetPlayer(src)
-    if RSGPlayer == nil then return end
-
     local sentDate = os.date('%x')
     local jobAlias, jobRecipient = GetJobRecipient(citizenid)
 
-    local sender, sendername = ResolveSenderIdentity(src, RSGPlayer, jobSenderAlias)
+    sender, sendername = ResolveSenderIdentity(src, RSGPlayer, sender, sendername, jobSenderAlias)
+    if not sender then return end
+
+    -- Check if trying to send to self (unless allowed in config)
+    if not jobRecipient and sender == citizenid and not Config.AllowSendToSelf then
+        TriggerClientEvent('ox_lib:notify', src, {
+            title = locale("sv_title_39"), 
+            description = locale('sv_send_to_self'), 
+            type = 'error', 
+            duration = 5000 
+        })
+        return
+    end
+
+    -- Check if player has bird post item
+    local hasBirdPost = RSGPlayer.Functions.GetItemByName(Config.BirdPostItem)
+    
+    if not hasBirdPost or hasBirdPost.amount < 1 then
+        TriggerClientEvent('ox_lib:notify', src, {
+            title = locale("cl_title_11"), 
+            description = locale('cl_no_birdpost_item'), 
+            type = 'error', 
+            duration = 5000 
+        })
+        return
+    end
+
+    -- Job telegrams sent by bird consume one bird post item and are copied to each matching recipient.
+    if jobRecipient then
+        RSGPlayer.Functions.RemoveItem(Config.BirdPostItem, 1)
+        TriggerClientEvent('rsg-inventory:client:ItemBox', src, RSGCore.Shared.Items[Config.BirdPostItem], 'remove', 1)
+
+        Wait(Config.BirdArrivalDelay)
+        SendJobTelegram(src, sender, sendername, jobAlias, jobRecipient, subject, message, 0, 1)
+        return
+    end
+
+    -- Get recipient info
+    local result = MySQL.Sync.fetchAll('SELECT * FROM players WHERE citizenid = @citizenid', {citizenid = citizenid})
+
+    if result[1] == nil then 
+        TriggerClientEvent('ox_lib:notify', src, {
+            title = locale("sv_title_39"), 
+            description = locale('sv_invalid_recipient'), 
+            type = 'error', 
+            duration = 5000 
+        })
+        return 
+    end
+
+    local tFirstName = json.decode(result[1].charinfo).firstname
+    local tLastName = json.decode(result[1].charinfo).lastname
+    local tFullName = tFirstName..' '..tLastName
+
+    -- Remove bird post item
+    RSGPlayer.Functions.RemoveItem(Config.BirdPostItem, 1)
+    TriggerClientEvent('rsg-inventory:client:ItemBox', src, RSGCore.Shared.Items[Config.BirdPostItem], 'remove', 1)
+
+    -- Wait for bird arrival delay, then insert telegram
+    Wait(Config.BirdArrivalDelay)
+    
+    -- Insert telegram with fromPostOffice = 0, pickedUp = 1 (bird delivers directly)
+    exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`, `fromPostOffice`, `pickedUp`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);', {citizenid, tFullName, sender, sendername, subject, sentDate, message, 0, 1})
+    
+    -- Increment unread count after bird delivers
+    local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(citizenid)
+    if (targetPlayer) then 
+        local state = Player(targetPlayer.PlayerData.source).state
+        state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) + 1
+    end
+
+    TriggerClientEvent('ox_lib:notify', src, {
+        title = locale("sv_title_38"), 
+        description = locale('sv_letter_delivered')..' '..tFullName, 
+        type = 'success', 
+        duration = 5000 
+    })
+end)
+
+-- VALIDATE BIRD POST SEND (checks item, then triggers bird spawn)
+RegisterServerEvent('rsg-telegram:server:ValidateBirdPostSend')
+AddEventHandler('rsg-telegram:server:ValidateBirdPostSend', function(sender, sendername, citizenid, subject, message, jobSenderAlias)
+    local src = source
+    local RSGPlayer = RSGCore.Functions.GetPlayer(src)
+    local sentDate = os.date('%x')
+    local jobAlias, jobRecipient = GetJobRecipient(citizenid)
+
+    sender, sendername = ResolveSenderIdentity(src, RSGPlayer, sender, sendername, jobSenderAlias)
     if not sender then return end
 
     -- Check if trying to send to self (unless allowed in config)
@@ -499,7 +648,7 @@ RegisterServerEvent('rsg-telegram:server:SavePerson')
 AddEventHandler('rsg-telegram:server:SavePerson', function(name,cid)
     local src = source
     local xPlayer = RSGCore.Functions.GetPlayer(src)
-    if xPlayer == nil then return end
+    while xPlayer == nil do Wait(0) end
     
     -- Check if person already exists in address book
     local existing = MySQL.query.await('SELECT * FROM address_book WHERE owner = ? AND citizenid = ?', {
@@ -520,12 +669,11 @@ RegisterServerEvent('rsg-telegram:server:RemovePerson')
 AddEventHandler('rsg-telegram:server:RemovePerson', function(cid)
     local src = source
     local xPlayer = RSGCore.Functions.GetPlayer(src)
-    if xPlayer == nil then return end
-
-    MySQL.Async.execute('DELETE FROM address_book WHERE owner = @owner AND citizenid = @citizenid',
+    while xPlayer == nil do Wait(0) end
+    MySQL.Async.execute('DELETE FROM address_book WHERE owner like @owner AND citizenid like @citizenid',
     {
         ['@owner'] = xPlayer.PlayerData.citizenid,
-        ['@citizenid'] = cid
+        ['citizenid'] = cid
     })
 
     TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale('sv_delete_success'), type = 'success', duration = 5000 })
@@ -756,6 +904,35 @@ AddEventHandler('rsg-telegram:server:MarkAsRead', function(tid)
         local state = Player(src).state
         state.telegramUnreadMessages = math.max(0, (state.telegramUnreadMessages or 0) - 1)
     end
+end)
+
+-- Legacy Callbacks (kept for compatibility)
+RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayers', function(source, cb)
+    local src = source
+    local xPlayer = RSGCore.Functions.GetPlayer(src)
+    exports.oxmysql:execute('SELECT * FROM `address_book` WHERE owner = @owner  ORDER BY name ASC', {
+        ['@owner'] = xPlayer.PlayerData.citizenid
+    }, function(result)
+        if result[1] then
+            cb(result)
+        else
+            cb(nil)
+        end
+    end)
+end)
+
+RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayersPostOffice', function(source, cb)
+    local src = source
+    local xPlayer = RSGCore.Functions.GetPlayer(src)
+    exports.oxmysql:execute('SELECT * FROM `address_book` WHERE owner = @owner  ORDER BY name ASC', {
+        ['@owner'] = xPlayer.PlayerData.citizenid
+    }, function(result)
+        if result[1] then
+            cb(result)
+        else
+            cb(nil)
+        end
+    end)
 end)
 
 -- Count telegrams for player

@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background: transparent;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font-body), 'Special Elite', serif;
+  color: theme('colors.ink');
+}
+
+/* Aged-paper texture built from layered gradients, no image asset needed. */
+.paper-texture {
+  background-color: #e6d9b8;
+  background-image:
+    radial-gradient(ellipse at 10% 15%, rgba(120, 90, 40, 0.12), transparent 45%),
+    radial-gradient(ellipse at 85% 80%, rgba(120, 90, 40, 0.14), transparent 50%),
+    radial-gradient(ellipse at 90% 10%, rgba(90, 60, 20, 0.08), transparent 40%),
+    linear-gradient(180deg, rgba(255, 250, 235, 0.35), rgba(210, 190, 150, 0.25));
+}
+
+.paper-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(80, 60, 30, 0.035) 0px,
+    rgba(80, 60, 30, 0.035) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+.rule-line {
+  border-bottom: 2px solid theme('colors.ink');
+  box-shadow: 0 3px 0 -1px theme('colors.ink');
+}
+
+/* Native scrollbars (and Chromium's Fluent up/down arrow buttons) never
+   render inside the CEF NUI browser reliably, so scrolling stays functional
+   via wheel/drag while the bar itself is invisible. */
+.scroll-thin {
+  scrollbar-width: none;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@keyframes telegram-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes telegram-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+}
+
+.anim-in {
+  animation: telegram-in 0.22s ease-out forwards;
+}
+
+.anim-out {
+  animation: telegram-out 0.18s ease-in forwards;
+}
