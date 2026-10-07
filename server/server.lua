@@ -1,774 +1,365 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
-
 lib.locale()
 
--- Job mailbox constants keep the new feature isolated from the existing personal inbox flow.
-local PERSONAL_MAILBOX = 'personal'
-local JOB_MAILBOX = 'job'
+local sendCooldowns   = {} -- [citizenid] = os.time() of last send (survives relog)
+local searchCooldowns = {} -- [src] = GetGameTimer() of last search
+local SEARCH_THROTTLE = 750 -- ms between directory searches per player
 
--- Normalizes configured aliases so "Sheriff", " sheriff ", and "sheriff" resolve the same way.
-local function NormalizeJobAlias(value)
-    if type(value) ~= 'string' then return nil end
-    return value:lower():gsub('^%s+', ''):gsub('%s+$', '')
+---------------------------------
+-- auto database setup
+---------------------------------
+local tables = {
+    rsg_telegrams = {
+        legacy = { 'rex_telegrams', 'telegrams' },
+        columns = {
+            { name = 'id',               def = 'INT(11) NOT NULL AUTO_INCREMENT' },
+            { name = 'citizenid',        def = 'VARCHAR(50) NOT NULL' },
+            { name = 'recipient_name',   def = 'VARCHAR(100) NOT NULL' },
+            { name = 'sender_citizenid', def = 'VARCHAR(50) NOT NULL' },
+            { name = 'sender_name',      def = 'VARCHAR(100) NOT NULL' },
+            { name = 'subject',          def = 'VARCHAR(100) NOT NULL' },
+            { name = 'message',          def = 'TEXT NOT NULL' },
+            { name = 'is_read',          def = 'TINYINT(1) NOT NULL DEFAULT 0' },
+            { name = 'sent_at',          def = 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' },
+        },
+        extra = { 'PRIMARY KEY (`id`)', 'INDEX `idx_citizenid` (`citizenid`)' },
+    },
+    rsg_telegram_contacts = {
+        legacy = { 'rex_telegram_contacts', 'telegram_contacts' },
+        columns = {
+            { name = 'id',                def = 'INT(11) NOT NULL AUTO_INCREMENT' },
+            { name = 'citizenid',         def = 'VARCHAR(50) NOT NULL' },
+            { name = 'contact_citizenid', def = 'VARCHAR(50) NOT NULL' },
+            { name = 'contact_name',      def = 'VARCHAR(100) NOT NULL' },
+            { name = 'nickname',          def = 'VARCHAR(50) NULL DEFAULT NULL' },
+            { name = 'added_at',          def = 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' },
+        },
+        extra = { 'PRIMARY KEY (`id`)', 'UNIQUE KEY `uniq_contact` (`citizenid`, `contact_citizenid`)' },
+    },
+}
+
+local function dbLog(msg, colour)
+    print(('[%s]%s %s^7'):format(GetCurrentResourceName(), colour or '^2', msg))
 end
 
--- Returns the configured job recipient for an alias entered instead of a citizen id.
-local function GetJobRecipient(alias)
-    if not Config.EnableJobMailboxes then return nil, nil end
+local function SetupTable(name, def)
+    local exists = MySQL.scalar.await(
+        'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', { name })
 
-    local normalizedAlias = NormalizeJobAlias(alias)
-    if not normalizedAlias or not Config.JobRecipients then return nil, nil end
-
-    for recipientAlias, recipientConfig in pairs(Config.JobRecipients) do
-        if NormalizeJobAlias(recipientAlias) == normalizedAlias then
-            return recipientAlias, recipientConfig
-        end
-    end
-
-    return nil, nil
-end
-
--- Looks up a job type from either the player's saved job data or the shared job definition.
-local function GetJobType(jobData)
-    if not jobData or not jobData.name then return nil end
-
-    if jobData.type then
-        return jobData.type
-    end
-
-    local sharedJob = RSGCore.Shared.Jobs[jobData.name]
-    return sharedJob and sharedJob.type or nil
-end
-
--- Checks whether a saved or online player job matches a job recipient rule.
-local function DoesJobMatchJobRecipient(jobData, recipientConfig)
-    if not jobData or not recipientConfig then return false end
-
-    if recipientConfig.jobType and GetJobType(jobData) == recipientConfig.jobType then
-        return true
-    end
-
-    if recipientConfig.jobs then
-        for _, jobName in ipairs(recipientConfig.jobs) do
-            if jobData.name == jobName then
-                return true
-            end
-        end
-    end
-
-    return false
-end
-
--- Validates that the sending player can send as the selected job mailbox.
-local function GetJobSenderForPlayer(player, alias)
-    local normalizedAlias = NormalizeJobAlias(alias)
-    if not player or not normalizedAlias or not Config.EnableJobMailboxes or not Config.JobRecipients then return nil, nil end
-
-    for recipientAlias, recipientConfig in pairs(Config.JobRecipients) do
-        if NormalizeJobAlias(recipientAlias) == normalizedAlias and DoesJobMatchJobRecipient(player.PlayerData.job, recipientConfig) then
-            return recipientAlias, recipientConfig
-        end
-    end
-
-    return nil, nil
-end
-
--- Resolves the authoritative sender identity for a telegram: either the player's own
--- citizenid/name, or (when a valid jobSenderAlias is supplied) their job mailbox identity.
--- The client-supplied sender/sendername are intentionally ignored here - trusting them let a
--- modified client impersonate any citizenid and defeat the "no send to self" check.
-local function ResolveSenderIdentity(src, player, jobSenderAlias)
-    if jobSenderAlias and jobSenderAlias ~= '' then
-        local alias, senderConfig = GetJobSenderForPlayer(player, jobSenderAlias)
-        if not alias then
-            TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_cannot_send_from_job'), type = 'error', duration = 5000 })
-            return nil, nil
-        end
-        return alias, senderConfig.label or alias
-    end
-
-    local charinfo = player.PlayerData.charinfo or {}
-    local fullname = ((charinfo.firstname or '') .. ' ' .. (charinfo.lastname or '')):gsub('^%s+', ''):gsub('%s+$', '')
-    local citizenid = player.PlayerData.citizenid
-    return citizenid, fullname ~= '' and fullname or citizenid
-end
-
--- Finds all current characters whose job matches the configured job recipient.
-local function GetJobRecipientPlayers(recipientConfig)
-    local recipients = {}
-    local seenCitizenIds = {}
-    local savedPlayers = MySQL.query.await('SELECT citizenid, charinfo, job FROM players') or {}
-
-    for _, row in ipairs(savedPlayers) do
-        local jobData = row.job and json.decode(row.job) or nil
-
-        if DoesJobMatchJobRecipient(jobData, recipientConfig) then
-            local charinfo = row.charinfo and json.decode(row.charinfo) or {}
-            local fullName = ((charinfo.firstname or '') .. ' ' .. (charinfo.lastname or '')):gsub('^%s+', ''):gsub('%s+$', '')
-
-            recipients[#recipients + 1] = {
-                citizenid = row.citizenid,
-                name = fullName ~= '' and fullName or row.citizenid
-            }
-            seenCitizenIds[row.citizenid] = true
-        end
-    end
-
-    -- Online PlayerData is treated as authoritative in case the job changed after the last database save.
-    for _, playerId in ipairs(RSGCore.Functions.GetPlayers()) do
-        local onlinePlayer = RSGCore.Functions.GetPlayer(playerId)
-
-        if onlinePlayer and DoesJobMatchJobRecipient(onlinePlayer.PlayerData.job, recipientConfig) then
-            local citizenid = onlinePlayer.PlayerData.citizenid
-
-            if not seenCitizenIds[citizenid] then
-                recipients[#recipients + 1] = {
-                    citizenid = citizenid,
-                    name = onlinePlayer.PlayerData.charinfo.firstname .. ' ' .. onlinePlayer.PlayerData.charinfo.lastname
-                }
-                seenCitizenIds[citizenid] = true
-            end
-        end
-    end
-
-    return recipients
-end
-
--- Notifies currently online recipients and updates their unread count after a job telegram is created.
-local function NotifyJobRecipients(recipients)
-    for _, recipient in ipairs(recipients) do
-        local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(recipient.citizenid)
-
-        if targetPlayer then
-            local state = Player(targetPlayer.PlayerData.source).state
-            state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) + 1
-
-            TriggerClientEvent('ox_lib:notify', targetPlayer.PlayerData.source, {
-                title = locale('sv_job_mail_title'),
-                description = locale('sv_job_mail_received'),
-                type = 'info',
-                duration = 10000
-            })
-        end
-    end
-end
-
--- Inserts one job telegram per matching character so read/delete state remains personal per recipient.
-local function SendJobTelegram(src, sender, sendername, alias, recipientConfig, subject, message, fromPostOffice, pickedUp)
-    local recipients = GetJobRecipientPlayers(recipientConfig)
-
-    if #recipients == 0 then
-        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_no_job_recipients'), type = 'error', duration = 5000 })
-        return false
-    end
-
-    local sentDate = os.date('%x')
-    local recipientLabel = recipientConfig.label or alias
-
-    for _, recipient in ipairs(recipients) do
-        exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`, `fromPostOffice`, `pickedUp`, `mailbox`, `jobTarget`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
-            {recipient.citizenid, recipientLabel, sender, sendername, subject, sentDate, message, fromPostOffice, pickedUp, JOB_MAILBOX, alias})
-    end
-
-    NotifyJobRecipients(recipients)
-    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale('sv_job_telegram_sent', recipientLabel), type = 'success', duration = 5000 })
-
-    return true, recipientLabel, recipients
-end
-
--- Make Bird Post as a Usable Item
-RSGCore.Functions.CreateUseableItem(Config.BirdPostItem, function(source)
-    TriggerClientEvent('rsg-telegram:client:WriteMessage', source)
-end)
-
-RegisterServerEvent('rsg-telegram:server:SendMessagePostOffice')
-AddEventHandler('rsg-telegram:server:SendMessagePostOffice', function(_clientSender, _clientSenderName, citizenid, subject, message, jobSenderAlias)
-    local src = source
-    local RSGPlayer = RSGCore.Functions.GetPlayer(src)
-    if RSGPlayer == nil then return end
-
-    local cost = Config.CostPerLetter
-    local cashBalance = RSGPlayer.PlayerData.money['cash']
-    local sentDate = os.date('%x')
-    local jobAlias, jobRecipient = GetJobRecipient(citizenid)
-
-    local sender, sendername = ResolveSenderIdentity(src, RSGPlayer, jobSenderAlias)
-    if not sender then return end
-
-    -- Check if trying to send to self (unless allowed in config)
-    if not jobRecipient and sender == citizenid and not Config.AllowSendToSelf then
-        TriggerClientEvent('ox_lib:notify', src, {
-            title = locale("sv_title_39"), 
-            description = locale('sv_send_to_self'), 
-            type = 'error', 
-            duration = 5000 
-        })
-        return
-    end
-
-    if Config.ChargePlayer and cashBalance < cost then
-        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_insufficient_balance'), type = 'error', duration = 5000 })
-        return
-    end
-
-    -- Job aliases are handled before citizen-id validation so values like "sheriff" can be used as recipients.
-    if jobRecipient then
-        local sent = SendJobTelegram(src, sender, sendername, jobAlias, jobRecipient, subject, message, 1, 0)
-
-        if sent and Config.ChargePlayer then
-            RSGPlayer.Functions.RemoveMoney('cash', cost, 'send job telegram')
-        end
-
-        return
-    end
-
-    local result = MySQL.Sync.fetchAll('SELECT * FROM players WHERE citizenid = @citizenid', {citizenid = citizenid})
-
-    if result[1] == nil then 
-        TriggerClientEvent('ox_lib:notify', src, {
-            title = locale("sv_title_39"), 
-            description = locale('sv_invalid_recipient'), 
-            type = 'error', 
-            duration = 5000 
-        })
-        return 
-    end
-
-    local tFirstName = json.decode(result[1].charinfo).firstname
-    local tLastName = json.decode(result[1].charinfo).lastname
-    local tFullName = tFirstName..' '..tLastName
-
-    -- Insert telegram with fromPostOffice = 1, pickedUp = 0 (needs to be picked up at post office)
-    exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`, `fromPostOffice`, `pickedUp`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);', {citizenid, tFullName, sender, sendername, subject, sentDate, message, 1, 0})
-    
-    -- Notify recipient and update their unread count (for envelope icon)
-    local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(citizenid)
-    if targetPlayer then
-        -- Update unread count to include unpicked message
-        local state = Player(targetPlayer.PlayerData.source).state
-        state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) + 1
-        
-        TriggerClientEvent('ox_lib:notify', targetPlayer.PlayerData.source, {
-            title = locale('sv_new_mail_title'),
-            description = locale('sv_post_office_waiting_mail'),
-            type = 'info',
-            duration = 10000
-        })
-    end
-    
-    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale('sv_letter_delivered')..' '..tFullName, type = 'success', duration = 5000 })
-
-    if Config.ChargePlayer then
-        RSGPlayer.Functions.RemoveMoney('cash', cost, 'send telegram')
-    end
-end)
-
--- VALIDATE BIRD POST SEND (checks item, then triggers bird spawn)
-RegisterServerEvent('rsg-telegram:server:ValidateBirdPostSend')
-AddEventHandler('rsg-telegram:server:ValidateBirdPostSend', function(_clientSender, _clientSenderName, citizenid, subject, message, jobSenderAlias)
-    local src = source
-    local RSGPlayer = RSGCore.Functions.GetPlayer(src)
-    if RSGPlayer == nil then return end
-
-    local sentDate = os.date('%x')
-    local jobAlias, jobRecipient = GetJobRecipient(citizenid)
-
-    local sender, sendername = ResolveSenderIdentity(src, RSGPlayer, jobSenderAlias)
-    if not sender then return end
-
-    -- Check if trying to send to self (unless allowed in config)
-    if not jobRecipient and sender == citizenid and not Config.AllowSendToSelf then
-        TriggerClientEvent('ox_lib:notify', src, {
-            title = locale("sv_title_39"), 
-            description = locale('sv_send_to_self'), 
-            type = 'error', 
-            duration = 5000 
-        })
-        return
-    end
-
-    -- Check if player has bird post item
-    local hasBirdPost = RSGPlayer.Functions.GetItemByName(Config.BirdPostItem)
-    
-    if not hasBirdPost or hasBirdPost.amount < 1 then
-        TriggerClientEvent('ox_lib:notify', src, {
-            title = locale("cl_title_11"), 
-            description = locale('cl_no_birdpost_item'), 
-            type = 'error', 
-            duration = 5000 
-        })
-        return
-    end
-
-    -- Job bird delivery uses the sender animation, then delivers copies to all matching workers.
-    if jobRecipient then
-        local recipients = GetJobRecipientPlayers(jobRecipient)
-
-        if #recipients == 0 then
-            TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_no_job_recipients'), type = 'error', duration = 5000 })
-            return
-        end
-
-        local targetCoords = vector3(-175.0, 628.0, 114.0)
-        for _, recipient in ipairs(recipients) do
-            local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(recipient.citizenid)
-            if targetPlayer then
-                local targetPed = GetPlayerPed(targetPlayer.PlayerData.source)
-                targetCoords = GetEntityCoords(targetPed)
+    -- migrate data from the old table name if it exists
+    if (not exists or exists == 0) and def.legacy then
+        local legacy = type(def.legacy) == 'table' and def.legacy or { def.legacy }
+        for _, oldName in ipairs(legacy) do
+            local old = MySQL.scalar.await(
+                'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', { oldName })
+            if old and old > 0 then
+                MySQL.query.await(('RENAME TABLE `%s` TO `%s`'):format(oldName, name))
+                dbLog(('Renamed table `%s` to `%s`'):format(oldName, name), '^3')
+                exists = 1
                 break
             end
         end
+    end
 
-        RSGPlayer.Functions.RemoveItem(Config.BirdPostItem, 1)
-        TriggerClientEvent('rsg-inventory:client:ItemBox', src, RSGCore.Shared.Items[Config.BirdPostItem], 'remove', 1)
-        TriggerClientEvent('rsg-telegram:client:StartBirdDelivery', src, targetCoords)
-
-        Wait(8000)
-        Wait(Config.BirdArrivalDelay)
-        SendJobTelegram(src, sender, sendername, jobAlias, jobRecipient, subject, message, 0, 1)
+    if not exists or exists == 0 then
+        local cols = {}
+        for _, c in ipairs(def.columns) do cols[#cols + 1] = ('`%s` %s'):format(c.name, c.def) end
+        for _, e in ipairs(def.extra) do cols[#cols + 1] = e end
+        MySQL.query.await(('CREATE TABLE `%s` (%s) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'):format(name, table.concat(cols, ', ')))
+        dbLog(('Database table `%s` created'):format(name))
         return
     end
 
-    -- Get recipient info
-    local result = MySQL.Sync.fetchAll('SELECT * FROM players WHERE citizenid = @citizenid', {citizenid = citizenid})
+    local known = {}
+    for _, c in ipairs(def.columns) do known[c.name] = true end
 
-    if result[1] == nil then 
-        TriggerClientEvent('ox_lib:notify', src, {
-            title = locale("sv_title_39"), 
-            description = locale('sv_invalid_recipient'), 
-            type = 'error', 
-            duration = 5000 
-        })
-        return 
-    end
+    local rows = MySQL.query.await([[
+        SELECT column_name AS name, column_type AS ctype, is_nullable AS nullable,
+               column_default AS dflt, extra AS extra
+        FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?
+    ]], { name }) or {}
 
-    local tFirstName = json.decode(result[1].charinfo).firstname
-    local tLastName = json.decode(result[1].charinfo).lastname
-    local tFullName = tFirstName..' '..tLastName
-    
-    -- Get target coords (if online, use their coords; if offline use a default location)
-    local targetCoords = vector3(-175.0, 628.0, 114.0) -- Valentine default
-    local targetPlayer = RSGCore.Functions.GetPlayerByCitizenId(citizenid)
-    if targetPlayer then
-        local targetPed = GetPlayerPed(targetPlayer.PlayerData.source)
-        targetCoords = GetEntityCoords(targetPed)
-    end
-
-    -- Remove bird post item FIRST
-    RSGPlayer.Functions.RemoveItem(Config.BirdPostItem, 1)
-    TriggerClientEvent('rsg-inventory:client:ItemBox', src, RSGCore.Shared.Items[Config.BirdPostItem], 'remove', 1)
-
-    -- Trigger client bird spawn and delivery animation
-    TriggerClientEvent('rsg-telegram:client:StartBirdDelivery', src, targetCoords)
-
-    -- Wait for bird to fly away + arrival delay, then insert telegram
-    Wait(8000) -- Wait for bird to fly away
-    Wait(Config.BirdArrivalDelay) -- Wait for arrival delay
-    
-    -- Insert telegram with fromPostOffice = 0, pickedUp = 1 (bird delivers directly to player)
-    exports.oxmysql:execute('INSERT INTO telegrams (`citizenid`, `recipient`, `sender`, `sendername`, `subject`, `sentDate`, `message`, `fromPostOffice`, `pickedUp`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);', {citizenid, tFullName, sender, sendername, subject, sentDate, message, 0, 1})
-    
-    -- Increment unread count after bird delivers
-    if targetPlayer then 
-        local state = Player(targetPlayer.PlayerData.source).state
-        state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) + 1
-    end
-
-    -- Notify success
-    TriggerClientEvent('ox_lib:notify', src, {
-        title = locale("sv_title_38"), 
-        description = locale('sv_letter_delivered')..' '..tFullName, 
-        type = 'success', 
-        duration = 5000 
-    })
-end)
-
--- Check for Inbox
-RegisterServerEvent('rsg-telegram:server:CheckInbox')
-AddEventHandler('rsg-telegram:server:CheckInbox', function()
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-
-    if Player == nil then return end
-
-    local citizenid = Player.PlayerData.citizenid
-
-    exports.oxmysql:execute('SELECT * FROM telegrams WHERE citizenid = ? AND mailbox = ? AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC',{citizenid, PERSONAL_MAILBOX}, function(result)
-        local res = {}
-
-        res['list'] = result or {}
-
-        TriggerClientEvent('rsg-telegram:client:InboxList', src, res)
-    end)
-end)
-
--- Get Messages from the Database
-RegisterServerEvent('rsg-telegram:server:GetMessages')
-AddEventHandler('rsg-telegram:server:GetMessages', function(tid)
-    local src = source
-    local telegram = {}
-
-    local result = MySQL.query.await('SELECT * FROM telegrams WHERE id = @id AND (birdstatus = 0 OR birdstatus = 1)',
-    {
-        ['@id'] = tid
-    })
-
-    if result[1] == nil then
-        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_no_message'), type = 'error', duration = 5000 })
-        return
-    end
-
-    telegram['citizenid'] = result[1]['citizenid']
-    telegram['recipient'] = result[1]['recipient']
-    telegram['sender'] = result[1]['sender']
-    telegram['sendername'] = result[1]['sendername']
-    telegram['subject'] = result[1]['subject']
-    telegram['sentDate'] = result[1]['sentDate']
-    telegram['message'] = result[1]['message']
-
-    MySQL.Async.execute('UPDATE `telegrams` SET `status` = 1, `birdstatus` = 1 WHERE id = @id',
-    {
-        ['@id'] = tid
-    })
-    local state = Player(src).state
-    state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) - 1
-
-    TriggerClientEvent('rsg-telegram:client:MessageData', src, telegram)
-end)
-
--- Delete Message
-RegisterServerEvent('rsg-telegram:server:DeleteMessage')
-AddEventHandler('rsg-telegram:server:DeleteMessage', function(tid)
-    local src = source
-
-    local result = MySQL.query.await('SELECT * FROM telegrams WHERE id = @id',
-    {
-        ['@id'] = tid
-    })
-
-    if result[1] == nil then
-        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale('sv_delete_fail'), type = 'error', duration = 5000 })
-        return
-    end
-
-    if result[1].status == 0 or result[1].birdstatus == 0 then
-        local state = Player(src).state
-        state.telegramUnreadMessages = (state.telegramUnreadMessages or 0) - 1
-    end
-
-    MySQL.Async.execute('DELETE FROM telegrams WHERE id = @id',
-    {
-        ['@id'] = tid
-    })
-
-    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale('sv_delete_success'), type = 'success', duration = 5000 })
-    TriggerClientEvent('rsg-telegram:client:ReadMessages', src)
-end)
-
--- Get Players
-RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayers', function(source, cb)
-    local players = {}
-    local src = source
-    local xPlayer = RSGCore.Functions.GetPlayer(src)
-    exports.oxmysql:execute('SELECT * FROM `address_book` WHERE owner = @owner  ORDER BY name ASC', {
-        ['@owner'] = xPlayer.PlayerData.citizenid
-    }, function(result)
-        if result[1] then
-            cb(result)
-        else
-            cb(nil)
-        end
-    end)
-end)
-
-RSGCore.Functions.CreateCallback('rsg-telegram:server:GetPlayersPostOffice', function(source, cb)
-    local src = source
-    local xPlayer = RSGCore.Functions.GetPlayer(src)
-    exports.oxmysql:execute('SELECT * FROM `address_book` WHERE owner = @owner  ORDER BY name ASC', {
-        ['@owner'] = xPlayer.PlayerData.citizenid
-    }, function(result)
-        if result[1] then
-            cb(result)
-        else
-            cb(nil)
-        end
-    end)
-end)
-
-RegisterServerEvent('rsg-telegram:server:SavePerson')
-AddEventHandler('rsg-telegram:server:SavePerson', function(name,cid)
-    local src = source
-    local xPlayer = RSGCore.Functions.GetPlayer(src)
-    if xPlayer == nil then return end
-    
-    -- Check if person already exists in address book
-    local existing = MySQL.query.await('SELECT * FROM address_book WHERE owner = ? AND citizenid = ?', {
-        xPlayer.PlayerData.citizenid,
-        cid
-    })
-
-    if existing and existing[1] then
-        TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_39"), description = locale("sv_already_exists"), type = 'error', duration = 5000 })
-        return
-    end
-
-    exports.oxmysql:execute('INSERT INTO address_book (`citizenid`, `name`, `owner`) VALUES (?, ?, ?);', {cid, name, xPlayer.PlayerData.citizenid})
-    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale("sv_title_40"), type = 'success', duration = 5000 })
-end)
-
-RegisterServerEvent('rsg-telegram:server:RemovePerson')
-AddEventHandler('rsg-telegram:server:RemovePerson', function(cid)
-    local src = source
-    local xPlayer = RSGCore.Functions.GetPlayer(src)
-    if xPlayer == nil then return end
-
-    MySQL.Async.execute('DELETE FROM address_book WHERE owner = @owner AND citizenid = @citizenid',
-    {
-        ['@owner'] = xPlayer.PlayerData.citizenid,
-        ['@citizenid'] = cid
-    })
-
-    TriggerClientEvent('ox_lib:notify', src, {title = locale("sv_title_38"), description = locale('sv_delete_success'), type = 'success', duration = 5000 })
-end)
-
--- Commands
-RSGCore.Commands.Add('telegram', locale("sv_command_telegram"), {}, false, function(source)
-    local src = source
-    TriggerClientEvent('rsg-telegram:client:OpenTelegram', src)
-end)
-
-RSGCore.Commands.Add('addressbook', locale("sv_command"), {}, false, function(source)
-    local src = source
-    TriggerClientEvent('rsg-telegram:client:OpenAddressbook', src)
-end)
-
--- ================================
--- Callbacks for Custom UI
--- ================================
-
--- Get Inbox Messages
-RSGCore.Functions.CreateCallback('rsg-telegram:server:getInbox', function(source, cb, atPostOffice)
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-    
-    if Player == nil then
-        cb({})
-        return
-    end
-
-    local citizenid = Player.PlayerData.citizenid
-    
-    -- If at post office, show ALL messages (including unpicked)
-    -- Otherwise, only show picked up messages
-    local query = ''
-    if atPostOffice then
-        query = 'SELECT * FROM telegrams WHERE citizenid = ? AND mailbox = ? AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC'
-    else
-        query = 'SELECT * FROM telegrams WHERE citizenid = ? AND mailbox = ? AND pickedUp = 1 AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC'
-    end
-    
-    exports.oxmysql:execute(query, {citizenid, PERSONAL_MAILBOX}, function(result)
-        cb(result or {})
-    end)
-end)
-
--- Get Job Inbox Messages
-RSGCore.Functions.CreateCallback('rsg-telegram:server:getJobInbox', function(source, cb, atPostOffice)
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-
-    -- When job mailboxes are disabled, the UI receives an empty mailbox and aliases are ignored.
-    if not Config.EnableJobMailboxes then
-        cb({})
-        return
-    end
-    
-    if Player == nil then
-        cb({})
-        return
-    end
-
-    local citizenid = Player.PlayerData.citizenid
-    
-    -- Job messages use their own mailbox but keep the same post-office pickup behavior.
-    local query = ''
-    if atPostOffice then
-        query = 'SELECT * FROM telegrams WHERE citizenid = ? AND mailbox = ? AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC'
-    else
-        query = 'SELECT * FROM telegrams WHERE citizenid = ? AND mailbox = ? AND pickedUp = 1 AND (birdstatus = 0 OR birdstatus = 1) ORDER BY id DESC'
-    end
-    
-    exports.oxmysql:execute(query, {citizenid, JOB_MAILBOX}, function(result)
-        cb(result or {})
-    end)
-end)
-
--- Get configured job recipients for the compose dropdown.
-RSGCore.Functions.CreateCallback('rsg-telegram:server:getJobRecipients', function(source, cb)
-    local recipients = {}
-
-    if Config.EnableJobMailboxes and Config.JobRecipients then
-        for alias, recipientConfig in pairs(Config.JobRecipients) do
-            -- Only expose job aliases in the compose dropdown when the config explicitly allows it.
-            if recipientConfig.showInRecipientList then
-                recipients[#recipients + 1] = {
-                    citizenid = alias,
-                    name = recipientConfig.label or alias,
-                    job = true
-                }
+    local have = {}
+    for _, r in ipairs(rows) do
+        local cname = r.name or r.COLUMN_NAME
+        if cname then
+            have[cname:lower()] = true
+            -- legacy NOT NULL columns without a default (from older telegram scripts) block inserts
+            local nullable, extra = r.nullable or r.IS_NULLABLE, r.extra or r.EXTRA or ''
+            local dflt = r.dflt or r.COLUMN_DEFAULT
+            if not known[cname:lower()] and nullable == 'NO' and dflt == nil and not extra:find('auto_increment') then
+                MySQL.query.await(('ALTER TABLE `%s` MODIFY `%s` %s NULL DEFAULT NULL'):format(name, cname, r.ctype or r.COLUMN_TYPE))
+                dbLog(('Legacy column `%s`.`%s` made optional'):format(name, cname), '^3')
             end
         end
     end
 
-    table.sort(recipients, function(a, b)
-        return a.name < b.name
-    end)
-
-    cb(recipients)
-end)
-
--- Get job mailboxes the current player is allowed to send from.
-RSGCore.Functions.CreateCallback('rsg-telegram:server:getJobSenders', function(source, cb)
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-    local senders = {}
-
-    if not Player or not Config.EnableJobMailboxes or not Config.JobRecipients then
-        cb(senders)
-        return
-    end
-
-    for alias, recipientConfig in pairs(Config.JobRecipients) do
-        -- A player may send as a job mailbox only when the config exposes it and their current job matches that mailbox rule.
-        if recipientConfig.showInSenderList and DoesJobMatchJobRecipient(Player.PlayerData.job, recipientConfig) then
-            senders[#senders + 1] = {
-                alias = alias,
-                label = recipientConfig.label or alias
-            }
+    for _, c in ipairs(def.columns) do
+        if not have[c.name] then
+            MySQL.query.await(('ALTER TABLE `%s` ADD COLUMN `%s` %s'):format(name, c.name, c.def))
+            dbLog(('Added missing column `%s`.`%s`'):format(name, c.name), '^3')
         end
     end
 
-    table.sort(senders, function(a, b)
-        return a.label < b.label
-    end)
+    if Config.Debug then dbLog(('Database table `%s` verified'):format(name)) end
+end
 
-    cb(senders)
-end)
-
--- Check for waiting messages at post office
-RSGCore.Functions.CreateCallback('rsg-telegram:server:checkWaitingMessages', function(source, cb)
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-    
-    if Player == nil then
-        cb(0)
-        return
-    end
-
-    local citizenid = Player.PlayerData.citizenid
-    
-    -- Count messages that are waiting to be picked up at post office
-    exports.oxmysql:execute('SELECT COUNT(*) as count FROM telegrams WHERE citizenid = ? AND fromPostOffice = 1 AND pickedUp = 0', {citizenid}, function(result)
-        cb(result[1].count or 0)
-    end)
-end)
-
--- Pick up messages from post office
-RegisterServerEvent('rsg-telegram:server:pickupMessages')
-AddEventHandler('rsg-telegram:server:pickupMessages', function()
-    local src = source
-    local RSGPlayer = RSGCore.Functions.GetPlayer(src)
-    
-    if not RSGPlayer then return end
-    
-    local citizenid = RSGPlayer.PlayerData.citizenid
-    
-    -- Get waiting messages
-    exports.oxmysql:execute('SELECT * FROM telegrams WHERE citizenid = ? AND fromPostOffice = 1 AND pickedUp = 0', {citizenid}, function(messages)
-        if messages and #messages > 0 then
-            -- Mark all as picked up
-            exports.oxmysql:execute('UPDATE telegrams SET pickedUp = 1 WHERE citizenid = ? AND fromPostOffice = 1 AND pickedUp = 0', {citizenid})
-            
-            -- Don't increment state here - messages were already counted when they arrived
-            -- State will remain the same because they're still unread (status=0)
-            -- The state will only decrease when messages are actually read (status=1)
-            
-            -- Notify player
-            lib.notify({
-                id = src,
-                title = locale("sv_title_38"),
-                description = locale('sv_picked_up_mail', #messages),
-                type = 'success',
-                duration = 5000
-            })
-        else
-            lib.notify({
-                id = src,
-                title = locale("sv_title_39"),
-                description = locale('sv_no_waiting_mail'),
-                type = 'info',
-                duration = 5000
-            })
+MySQL.ready(function()
+    if Config.AutoDatabase then
+        for name, def in pairs(tables) do
+            local ok, err = pcall(SetupTable, name, def)
+            if not ok then dbLog(('Database setup failed for `%s`: %s'):format(name, tostring(err)), '^1') end
         end
-    end)
+    end
+    if Config.PurgeReadAfterDays and Config.PurgeReadAfterDays > 0 then
+        local removed = MySQL.update.await('DELETE FROM rsg_telegrams WHERE is_read = 1 AND sent_at < (NOW() - INTERVAL ? DAY)', { Config.PurgeReadAfterDays })
+        if removed and removed > 0 then dbLog(('Purged %d old read telegrams'):format(removed)) end
+    end
 end)
 
--- Get Addressbook Contacts
-RSGCore.Functions.CreateCallback('rsg-telegram:server:getAddressbook', function(source, cb)
+---------------------------------
+-- helpers
+---------------------------------
+local function fullName(charinfo)
+    if type(charinfo) == 'string' then charinfo = json.decode(charinfo) end
+    if type(charinfo) ~= 'table' then return locale('sv_unknown') end
+    local name = ('%s %s'):format(charinfo.firstname or '', charinfo.lastname or ''):gsub('^%s+', ''):gsub('%s+$', '')
+    return name ~= '' and name or locale('sv_unknown')
+end
+
+local function notify(src, desc, ntype)
+    TriggerClientEvent('ox_lib:notify', src, { title = locale('cl_title'), description = desc, type = ntype or 'inform', duration = 5000 })
+end
+
+-- trims, strips control chars (keeps newlines/tabs) and angle brackets, enforces length
+local function sanitize(str, max)
+    if type(str) ~= 'string' then return nil end
+    str = str:gsub('[%z\1-\8\11\12\14-\31\127<>]', ''):gsub('^%s+', ''):gsub('%s+$', '')
+    if #str == 0 or utf8.len(str) == nil or utf8.len(str) > max then return nil end
+    return str
+end
+
+local function validCid(cid)
+    return type(cid) == 'string' and #cid > 0 and #cid <= 50 and cid:match('^[%w_%-]+$') ~= nil
+end
+
+local function isNearPostOffice(src)
+    local ped = GetPlayerPed(src)
+    if ped == 0 then return false end
+    local pos = GetEntityCoords(ped)
+    local range = Config.PromptDistance + 3.0
+    for _, office in ipairs(Config.PostOffices) do
+        if #(pos - office.coords) <= range then return true end
+    end
+    return false
+end
+
+---------------------------------
+-- inbox
+---------------------------------
+lib.callback.register('rsg-telegram:server:getInbox', function(source)
+    local Player = RSGCore.Functions.GetPlayer(source)
+    if not Player or not isNearPostOffice(source) then return {} end
+    return MySQL.query.await(
+        'SELECT id, sender_citizenid, sender_name, subject, message, is_read, UNIX_TIMESTAMP(sent_at) AS sent_at FROM rsg_telegrams WHERE citizenid = ? ORDER BY sent_at DESC, id DESC LIMIT ?',
+        { Player.PlayerData.citizenid, Config.MaxInbox }
+    ) or {}
+end)
+
+---------------------------------
+-- recipient search (by name)
+---------------------------------
+lib.callback.register('rsg-telegram:server:searchRecipients', function(source, query)
+    local Player = RSGCore.Functions.GetPlayer(source)
+    if not Player or type(query) ~= 'string' then return {} end
+
+    local now = GetGameTimer()
+    if searchCooldowns[source] and now - searchCooldowns[source] < SEARCH_THROTTLE then return {} end
+    searchCooldowns[source] = now
+
+    query = query:gsub('[%%_<>\\]', ''):sub(1, 40)
+    if #query < Config.SearchMinChars then return {} end
+
+    local like = '%' .. query .. '%'
+    local rows = MySQL.query.await([[
+        SELECT citizenid, charinfo FROM players
+        WHERE citizenid <> ?
+          AND ( CONCAT(JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.firstname')), ' ', JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.lastname'))) LIKE ?
+                OR citizenid = ? )
+        LIMIT 10
+    ]], { Player.PlayerData.citizenid, like, query }) or {}
+
+    local results = {}
+    for i = 1, #rows do
+        results[i] = { citizenid = rows[i].citizenid, name = fullName(rows[i].charinfo) }
+    end
+    return results
+end)
+
+---------------------------------
+-- send
+---------------------------------
+lib.callback.register('rsg-telegram:server:send', function(source, data)
     local src = source
     local Player = RSGCore.Functions.GetPlayer(src)
-    
-    if Player == nil then
-        cb({})
-        return
+    if not Player or type(data) ~= 'table' then return false end
+    if not isNearPostOffice(src) then return false end
+
+    local senderCid = Player.PlayerData.citizenid
+    local now = os.time()
+    local last = sendCooldowns[senderCid]
+    if last and now - last < Config.SendCooldown then
+        notify(src, locale('sv_cooldown', Config.SendCooldown - (now - last)), 'error')
+        return false
     end
 
-    exports.oxmysql:execute('SELECT * FROM address_book WHERE owner = ? ORDER BY name ASC', {Player.PlayerData.citizenid}, function(result)
-        cb(result or {})
-    end)
-end)
+    local subject = sanitize(data.subject, Config.MaxSubject)
+    local message = sanitize(data.message, Config.MaxMessage)
+    local target  = validCid(data.citizenid) and data.citizenid or nil
+    if not subject or not message or not target then
+        notify(src, locale('sv_invalid'), 'error')
+        return false
+    end
 
--- Mark Message as Read
-RegisterServerEvent('rsg-telegram:server:MarkAsRead')
-AddEventHandler('rsg-telegram:server:MarkAsRead', function(tid)
-    local src = source
-    local RSGPlayer = RSGCore.Functions.GetPlayer(src)
-    
-    if RSGPlayer == nil then return end
+    if target == senderCid then
+        notify(src, locale('sv_self'), 'error')
+        return false
+    end
 
-    local result = MySQL.query.await('SELECT * FROM telegrams WHERE id = @id', {['@id'] = tid})
-    
-    if result[1] == nil then return end
+    -- claim the cooldown slot before yielding on the DB, so parallel requests can't slip through
+    sendCooldowns[senderCid] = now
 
-    -- Check if message was unread (status = 0 or birdstatus = 0)
-    local wasUnread = (tonumber(result[1].status) == 0 or tonumber(result[1].birdstatus) == 0)
-    
-    -- Update status to read
-    -- Also mark post office messages as picked up when read (since you can only read them at post office)
-    if tonumber(result[1].fromPostOffice) == 1 then
-        MySQL.Async.execute('UPDATE telegrams SET status = 1, birdstatus = 1, pickedUp = 1 WHERE id = @id', {['@id'] = tid})
+    local row = MySQL.single.await('SELECT charinfo FROM players WHERE citizenid = ?', { target })
+    if not row then
+        sendCooldowns[senderCid] = last
+        notify(src, locale('sv_no_recipient'), 'error')
+        return false
+    end
+
+    if Config.SendCost > 0 and not Player.Functions.RemoveMoney(Config.MoneyType, Config.SendCost, 'telegram-sent') then
+        sendCooldowns[senderCid] = last
+        notify(src, locale('sv_no_money', Config.SendCost), 'error')
+        return false
+    end
+
+    local senderName    = fullName(Player.PlayerData.charinfo)
+    local recipientName = fullName(row.charinfo)
+
+    local function deliver()
+        MySQL.insert.await(
+            'INSERT INTO rsg_telegrams (citizenid, recipient_name, sender_citizenid, sender_name, subject, message) VALUES (?, ?, ?, ?, ?, ?)',
+            { target, recipientName, senderCid, senderName, subject, message }
+        )
+        local Target = RSGCore.Functions.GetPlayerByCitizenId(target)
+        if Target then
+            TriggerClientEvent('rsg-telegram:client:newTelegram', Target.PlayerData.source, senderName)
+        end
+    end
+
+    if Config.DeliveryDelay > 0 then
+        SetTimeout(Config.DeliveryDelay * 1000, deliver)
     else
-        MySQL.Async.execute('UPDATE telegrams SET status = 1, birdstatus = 1 WHERE id = @id', {['@id'] = tid})
+        deliver()
     end
-    
-    -- Decrease unread count if message was unread
-    if wasUnread then
-        local state = Player(src).state
-        state.telegramUnreadMessages = math.max(0, (state.telegramUnreadMessages or 0) - 1)
-    end
+
+    notify(src, locale('sv_sent'), 'success')
+    return true
 end)
 
--- Count telegrams for player
-RSGCore.Functions.CreateCallback('rsg-telegram:server:getTelegramsAmount', function(source, cb)
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-    if Player ~= nil then
-        -- Count both: unread messages (picked up) AND unpicked post office messages
-        local result = MySQL.prepare.await('SELECT COUNT(*) FROM telegrams WHERE citizenid = ? AND ((status = ? OR birdstatus = ?) OR (fromPostOffice = 1 AND pickedUp = 0))', {Player.PlayerData.citizenid, 0, 0})
-        if result > 0 then
-            cb(result)
-        else
-            cb(0)
+---------------------------------
+-- address book
+---------------------------------
+lib.callback.register('rsg-telegram:server:getContacts', function(source)
+    local Player = RSGCore.Functions.GetPlayer(source)
+    if not Player then return {} end
+    return MySQL.query.await(
+        'SELECT contact_citizenid AS citizenid, contact_name AS name, nickname FROM rsg_telegram_contacts WHERE citizenid = ? ORDER BY COALESCE(nickname, contact_name) ASC',
+        { Player.PlayerData.citizenid }
+    ) or {}
+end)
+
+lib.callback.register('rsg-telegram:server:addContact', function(source, data)
+    local Player = RSGCore.Functions.GetPlayer(source)
+    if not Player or type(data) ~= 'table' or not validCid(data.citizenid) then return false end
+    local owner = Player.PlayerData.citizenid
+    if data.citizenid == owner then
+        notify(source, locale('sv_self_contact'), 'error')
+        return false
+    end
+
+    local existing = MySQL.scalar.await('SELECT 1 FROM rsg_telegram_contacts WHERE citizenid = ? AND contact_citizenid = ?', { owner, data.citizenid })
+    if not existing then
+        local count = MySQL.scalar.await('SELECT COUNT(*) FROM rsg_telegram_contacts WHERE citizenid = ?', { owner }) or 0
+        if count >= Config.MaxContacts then
+            notify(source, locale('sv_contacts_full', Config.MaxContacts), 'error')
+            return false
         end
     end
+
+    local row = MySQL.single.await('SELECT charinfo FROM players WHERE citizenid = ?', { data.citizenid })
+    if not row then
+        notify(source, locale('sv_no_recipient'), 'error')
+        return false
+    end
+
+    local nickname = sanitize(data.nickname, 50)
+    MySQL.insert.await(
+        'INSERT INTO rsg_telegram_contacts (citizenid, contact_citizenid, contact_name, nickname) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE contact_name = VALUES(contact_name), nickname = VALUES(nickname)',
+        { owner, data.citizenid, fullName(row.charinfo), nickname }
+    )
+    notify(source, locale(existing and 'sv_contact_updated' or 'sv_contact_added'), 'success')
+    return true
+end)
+
+lib.callback.register('rsg-telegram:server:removeContact', function(source, citizenid)
+    local Player = RSGCore.Functions.GetPlayer(source)
+    if not Player or not validCid(citizenid) then return false end
+    local affected = MySQL.update.await('DELETE FROM rsg_telegram_contacts WHERE citizenid = ? AND contact_citizenid = ?', { Player.PlayerData.citizenid, citizenid })
+    if affected and affected > 0 then
+        notify(source, locale('sv_contact_removed'), 'inform')
+        return true
+    end
+    return false
+end)
+
+---------------------------------
+-- read / delete
+---------------------------------
+local function validId(id)
+    return math.type(id) == 'integer' and id > 0
+end
+
+RegisterNetEvent('rsg-telegram:server:markRead', function(id)
+    local Player = RSGCore.Functions.GetPlayer(source)
+    if not Player or not validId(id) then return end
+    MySQL.update('UPDATE rsg_telegrams SET is_read = 1 WHERE id = ? AND citizenid = ? AND is_read = 0', { id, Player.PlayerData.citizenid })
+end)
+
+lib.callback.register('rsg-telegram:server:delete', function(source, id)
+    local Player = RSGCore.Functions.GetPlayer(source)
+    if not Player or not validId(id) then return false end
+    local affected = MySQL.update.await('DELETE FROM rsg_telegrams WHERE id = ? AND citizenid = ?', { id, Player.PlayerData.citizenid })
+    if affected and affected > 0 then
+        notify(source, locale('sv_deleted'), 'inform')
+        return true
+    end
+    return false
+end)
+
+---------------------------------
+-- unread reminder on login (server-side core event, not client-triggerable)
+---------------------------------
+AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
+    if not Player or not Player.PlayerData then return end
+    local src, cid = Player.PlayerData.source, Player.PlayerData.citizenid
+    SetTimeout(5000, function()
+        local count = MySQL.scalar.await('SELECT COUNT(*) FROM rsg_telegrams WHERE citizenid = ? AND is_read = 0', { cid })
+        if count and count > 0 and GetPlayerName(src) then
+            notify(src, locale('sv_unread', count), 'inform')
+        end
+    end)
+end)
+
+AddEventHandler('playerDropped', function()
+    searchCooldowns[source] = nil
 end)

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>rsg-telegram</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="hidden">
+    <div class="panel" id="panel">
+        <div class="header">
+            <button class="circle-btn hidden" id="btn-back" data-i18n-title="ui_back">&#10094;</button>
+            <div class="titles">
+                <div class="title" data-i18n="ui_title">Telegram Office</div>
+                <div class="subtitle" id="office-name">Post Office</div>
+            </div>
+            <button class="circle-btn" id="btn-close" data-i18n-title="ui_close">&#10005;</button>
+        </div>
+        <div class="divider"><span>&#10022;</span></div>
+
+        <!-- inbox -->
+        <div class="view" id="view-inbox">
+            <div class="toolbar">
+                <span class="label"><span data-i18n="ui_inbox">Inbox</span> <span id="unread-count"></span></span>
+                <div class="toolbar-btns">
+                    <button class="wood-btn muted" id="btn-contacts" data-i18n="ui_address_book">Address Book</button>
+                    <button class="wood-btn" id="btn-compose" data-i18n="ui_write">Write Telegram</button>
+                </div>
+            </div>
+            <div class="list" id="inbox-list"></div>
+        </div>
+
+        <!-- read -->
+        <div class="view hidden" id="view-read">
+            <div class="paper">
+                <div class="paper-top">
+                    <div class="paper-head" data-i18n="ui_paper_head">WESTERN UNION TELEGRAPH</div>
+                    <div class="text-size">
+                        <button class="size-btn" data-size="-1" data-i18n-title="ui_smaller">A&minus;</button>
+                        <span class="size-val" id="size-val"></span>
+                        <button class="size-btn" data-size="1" data-i18n-title="ui_larger">A+</button>
+                    </div>
+                </div>
+                <div class="paper-row"><span data-i18n="ui_from">From</span><b id="read-from"></b></div>
+                <div class="paper-row"><span data-i18n="ui_date">Date</span><b id="read-date"></b></div>
+                <div class="paper-row"><span data-i18n="ui_re">Re</span><b id="read-subject"></b></div>
+                <div class="ink-divider"></div>
+                <div class="paper-body" id="read-body"></div>
+                <div class="paper-stop" data-i18n="ui_stop">&mdash; STOP &mdash;</div>
+            </div>
+            <div class="actions">
+                <button class="wood-btn" id="btn-reply" data-i18n="ui_reply">Reply</button>
+                <button class="wood-btn muted" id="btn-save-sender" data-i18n="ui_save_sender">Save Sender</button>
+                <button class="wood-btn muted" id="btn-delete" data-i18n="ui_destroy">Destroy</button>
+            </div>
+        </div>
+
+        <!-- address book -->
+        <div class="view hidden" id="view-contacts">
+            <label class="field-label" data-i18n="ui_add_contact_label">Add a Contact</label>
+            <div class="recipient-wrap">
+                <input type="text" id="in-contact-search" data-i18n-ph="ui_contact_search_ph" placeholder="Search by name or citizen ID..." autocomplete="off">
+                <div class="results hidden" id="contact-results"></div>
+            </div>
+            <div class="add-contact hidden" id="add-contact">
+                <div class="chosen" id="contact-chosen"></div>
+                <input type="text" id="in-nickname" maxlength="50" data-i18n-ph="ui_nickname_ph" placeholder="Nickname (optional)">
+                <div class="actions">
+                    <button class="wood-btn" id="btn-add-contact" data-i18n="ui_add_contact_btn">Add to Address Book</button>
+                </div>
+            </div>
+            <div class="toolbar contacts-head">
+                <span class="label"><span data-i18n="ui_contacts">Contacts</span> <span id="contact-count"></span></span>
+            </div>
+            <div class="list" id="contact-list"></div>
+        </div>
+
+        <!-- compose -->
+        <div class="view hidden" id="view-compose">
+            <label class="field-label" data-i18n="ui_recipient">Recipient</label>
+            <div class="recipient-wrap">
+                <input type="text" id="in-recipient" data-i18n-ph="ui_recipient_ph" placeholder="Choose from address book or search..." autocomplete="off">
+                <div class="results hidden" id="search-results"></div>
+            </div>
+            <div class="chosen hidden" id="chosen"></div>
+
+            <label class="field-label"><span data-i18n="ui_subject">Subject</span> <span class="counter" id="subj-counter"></span></label>
+            <input type="text" id="in-subject" data-i18n-ph="ui_subject" placeholder="Subject">
+
+            <label class="field-label"><span data-i18n="ui_message">Message</span> <span class="counter" id="msg-counter"></span></label>
+            <textarea id="in-message" rows="8" data-i18n-ph="ui_message_ph" placeholder="Write your telegram..."></textarea>
+
+            <div class="cost"><span data-i18n="ui_fee">Fee:</span> <b id="send-cost"></b></div>
+            <div class="actions">
+                <button class="wood-btn" id="btn-send" data-i18n="ui_send">Send Telegram</button>
+            </div>
+        </div>
+
+        <div class="resize-handle" id="resize-handle" data-i18n-title="ui_resize"></div>
+    </div>
+
+    <!-- confirm modal -->
+    <div class="modal-back hidden" id="modal">
+        <div class="modal">
+            <div class="modal-title" data-i18n="ui_confirm_title">Destroy Telegram?</div>
+            <div class="ink-divider"></div>
+            <p class="modal-text" data-i18n="ui_confirm_text">This telegram will be burned and cannot be recovered.</p>
+            <div class="actions">
+                <button class="wood-btn" id="modal-yes" data-i18n="ui_destroy">Destroy</button>
+                <button class="wood-btn muted" id="modal-no" data-i18n="ui_cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="toasts"></div>
+<script src="script.js"></script>
+</body>
+</html>

@@ -3,33 +3,36 @@ rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aw
 game 'rdr3'
 
 description 'rsg-telegram'
-version '2.1.1'
+version '3.0.0'
 
 shared_scripts {
     '@ox_lib/init.lua',
-    'config.lua',
-    'shared/functions.lua',
+    'shared/config.lua',
 }
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
-    'server/*.lua',
+    'server/server.lua',
+    'server/versionchecker.lua'
 }
 
 client_scripts {
     'client/client.lua'
 }
 
-ui_page('html/ui.html')
+ui_page 'html/index.html'
 
 files {
     'locales/*.json',
-    'html/ui.html',
-    'html/_next/**/*',
+    'html/index.html',
+    'html/style.css',
+    'html/script.js',
 }
 
 dependencies {
-   'ox_lib'
+    'rsg-core',
+    'ox_lib',
+    'oxmysql',
 }
 
 lua54 'yes'
