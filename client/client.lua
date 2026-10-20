@@ -20,7 +20,6 @@ CreateThread(function()
     PromptRegisterEnd(openPrompt)
 
     for _, office in ipairs(Config.PostOffices) do
-        office.label = CreateVarString(10, 'LITERAL_STRING', office.name)
         if office.showblip then
             local blip = BlipAddForCoords(Config.Blip.style, office.coords.x, office.coords.y, office.coords.z)
             SetBlipSprite(blip, Config.Blip.sprite, true)
@@ -102,7 +101,7 @@ CreateThread(function()
                 local dist = #(pos - office.coords)
                 if dist <= maxDist then
                     sleep = 0
-                    PromptSetActiveGroupThisFrame(promptGroup, office.label)
+                    PromptSetActiveGroupThisFrame(promptGroup, CreateVarString(10, 'LITERAL_STRING', office.name))
                     if PromptHasStandardModeCompleted(openPrompt) then
                         openTelegrams(office.name)
                     end
