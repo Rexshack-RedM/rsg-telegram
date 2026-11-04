@@ -163,6 +163,7 @@ $('in-recipient').addEventListener('input', (e) => {
     if (q.length < state.minSearch) return;
     timers.recipient = setTimeout(async () => {
         const results = await post('search', { query: q });
+        if (results === false) return; // throttled
         if ($('in-recipient').value.trim() === q) renderRecipientResults(q, Array.isArray(results) ? results : []);
     }, 300);
 });
@@ -211,7 +212,10 @@ function renderContacts() {
         });
         row.querySelector('[data-act="remove"]').addEventListener('click', async (e) => {
             e.stopPropagation();
+            const btn = e.currentTarget;
+            btn.disabled = true;
             const ok = await post('removeContact', { citizenid: c.citizenid });
+            if (!ok) btn.disabled = false;
             if (ok) { state.contacts = state.contacts.filter(x => x.citizenid !== c.citizenid); renderContacts(); }
         });
     });
@@ -240,7 +244,7 @@ $('in-contact-search').addEventListener('input', (e) => {
     if (q.length < state.minSearch) { box.classList.add('hidden'); return; }
     timers.contact = setTimeout(async () => {
         const results = await post('search', { query: q });
-        if ($('in-contact-search').value.trim() !== q) return;
+        if (results === false || $('in-contact-search').value.trim() !== q) return;
         const list = Array.isArray(results) ? results : [];
         box.innerHTML = list.length
             ? list.map((r, i) => `<div class="result" data-i="${i}"><span>${esc(r.name)}</span><small>${esc(r.citizenid)}</small></div>`).join('')

@@ -1,3 +1,4 @@
+local RSGCore = exports['rsg-core']:GetCoreObject()
 lib.locale()
 
 local blips = {}
@@ -42,8 +43,9 @@ end
 local function openTelegrams(officeName)
     if isOpen or isOpening then return end
     isOpening = true
-    local inbox = lib.callback.await('rsg-telegram:server:getInbox', false)
+    local inbox = RSGCore.Functions.AwaitCallback('rsg-telegram:server:getInbox', 5000)
     isOpening = false
+    if type(inbox) ~= 'table' then return end
     isOpen = true
     SetNuiFocus(true, true)
     SendNUIMessage({
@@ -61,7 +63,10 @@ end
 
 local function nuiCallback(name, event, build)
     RegisterNUICallback(name, function(data, cb)
-        cb(lib.callback.await(event, false, build and build(data or {})))
+        if not isOpen then return cb(false) end
+        local result = RSGCore.Functions.AwaitCallback(event, 5000, build and build(data or {}))
+        if result == nil then result = false end
+        cb(result)
     end)
 end
 
@@ -72,7 +77,7 @@ end)
 
 RegisterNUICallback('read', function(data, cb)
     local id = math.tointeger(tonumber(data and data.id))
-    if id then TriggerServerEvent('rsg-telegram:server:markRead', id) end
+    if id and isOpen then TriggerServerEvent('rsg-telegram:server:markRead', id) end
     cb('ok')
 end)
 
@@ -96,10 +101,12 @@ CreateThread(function()
     while true do
         local sleep = 1000
         if not isOpen and openPrompt then
-            local pos = GetEntityCoords(cache.ped)
+            local ped = PlayerPedId()
+            local pos = GetEntityCoords(ped)
+            local dead = IsEntityDead(ped)
             for _, office in ipairs(Config.PostOffices) do
                 local dist = #(pos - office.coords)
-                if dist <= maxDist then
+                if dist <= maxDist and not dead then
                     sleep = 0
                     PromptSetActiveGroupThisFrame(promptGroup, CreateVarString(10, 'LITERAL_STRING', office.name))
                     if PromptHasStandardModeCompleted(openPrompt) then
@@ -113,7 +120,7 @@ CreateThread(function()
         elseif isOpen then
             -- close the UI if the player dies while it is open
             sleep = 500
-            if IsEntityDead(cache.ped) then closeTelegrams() end
+            if IsEntityDead(PlayerPedId()) then closeTelegrams() end
         end
         Wait(sleep)
     end
@@ -123,11 +130,11 @@ end)
 -- incoming telegram
 ---------------------------------
 RegisterNetEvent('rsg-telegram:client:newTelegram', function(senderName)
-    lib.notify({
+    RSGCore.Functions.Notify({
         title = locale('cl_title'),
         description = locale('cl_new_telegram', senderName or locale('sv_unknown')),
         type = 'inform',
-        icon = 'envelope',
+        icon = 'fa-solid fa-envelope',
         position = 'top-right',
         duration = 7000,
     })

@@ -2,8 +2,9 @@ local RSGCore = exports['rsg-core']:GetCoreObject()
 lib.locale()
 
 local sendCooldowns   = {} -- [citizenid] = os.time() of last send (survives relog)
-local searchCooldowns = {} -- [src] = GetGameTimer() of last search
-local SEARCH_THROTTLE = 750 -- ms between directory searches per player
+local throttles       = {} -- [src] = { [action] = GetGameTimer() }
+local SEARCH_THROTTLE = 500 -- ms between directory searches per player
+local ACTION_THROTTLE = 750 -- ms between address book / delete actions per player
 
 ---------------------------------
 -- auto database setup
@@ -128,7 +129,17 @@ local function fullName(charinfo)
 end
 
 local function notify(src, desc, ntype)
-    TriggerClientEvent('ox_lib:notify', src, { title = locale('cl_title'), description = desc, type = ntype or 'inform', duration = 5000 })
+    TriggerClientEvent('RSGCore:Client:Notify', src, { title = locale('cl_title'), description = desc, type = ntype or 'inform', duration = 5000 })
+end
+
+-- per-player, per-action rate limit (true = allowed)
+local function throttle(src, action, ms)
+    local now = GetGameTimer()
+    local t = throttles[src]
+    if not t then t = {}; throttles[src] = t end
+    if t[action] and now - t[action] < ms then return false end
+    t[action] = now
+    return true
 end
 
 -- trims, strips control chars (keeps newlines/tabs) and angle brackets, enforces length
@@ -155,62 +166,58 @@ local function isNearPostOffice(src)
 end
 
 ---------------------------------
--- inbox
+-- inbox (telegrams with a future sent_at are still "in transit")
 ---------------------------------
-lib.callback.register('rsg-telegram:server:getInbox', function(source)
+RSGCore.Functions.CreateCallback('rsg-telegram:server:getInbox', function(source, cb)
     local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player or not isNearPostOffice(source) then return {} end
-    return MySQL.query.await(
-        'SELECT id, sender_citizenid, sender_name, subject, message, is_read, UNIX_TIMESTAMP(sent_at) AS sent_at FROM rsg_telegrams WHERE citizenid = ? ORDER BY sent_at DESC, id DESC LIMIT ?',
+    if not Player or not isNearPostOffice(source) then return cb({}) end
+    cb(MySQL.query.await(
+        'SELECT id, sender_citizenid, sender_name, subject, message, is_read, UNIX_TIMESTAMP(sent_at) AS sent_at FROM rsg_telegrams WHERE citizenid = ? AND sent_at <= NOW() ORDER BY sent_at DESC, id DESC LIMIT ?',
         { Player.PlayerData.citizenid, Config.MaxInbox }
-    ) or {}
+    ) or {})
 end)
 
 ---------------------------------
--- recipient search (by name)
+-- recipient search (by name or citizen id)
 ---------------------------------
-lib.callback.register('rsg-telegram:server:searchRecipients', function(source, query)
+RSGCore.Functions.CreateCallback('rsg-telegram:server:searchRecipients', function(source, cb, query)
     local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player or type(query) ~= 'string' then return {} end
-
-    local now = GetGameTimer()
-    if searchCooldowns[source] and now - searchCooldowns[source] < SEARCH_THROTTLE then return {} end
-    searchCooldowns[source] = now
+    if not Player or type(query) ~= 'string' or not isNearPostOffice(source) then return cb({}) end
+    -- false tells the UI "throttled, keep what you have" instead of "no results"
+    if not throttle(source, 'search', SEARCH_THROTTLE) then return cb(false) end
 
     query = query:gsub('[%%_<>\\]', ''):sub(1, 40)
-    if #query < Config.SearchMinChars then return {} end
+    if #query < Config.SearchMinChars then return cb({}) end
 
-    local like = '%' .. query .. '%'
     local rows = MySQL.query.await([[
         SELECT citizenid, charinfo FROM players
         WHERE citizenid <> ?
           AND ( CONCAT(JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.firstname')), ' ', JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.lastname'))) LIKE ?
                 OR citizenid = ? )
         LIMIT 10
-    ]], { Player.PlayerData.citizenid, like, query }) or {}
+    ]], { Player.PlayerData.citizenid, '%' .. query .. '%', query }) or {}
 
     local results = {}
     for i = 1, #rows do
         results[i] = { citizenid = rows[i].citizenid, name = fullName(rows[i].charinfo) }
     end
-    return results
+    cb(results)
 end)
 
 ---------------------------------
 -- send
 ---------------------------------
-lib.callback.register('rsg-telegram:server:send', function(source, data)
+RSGCore.Functions.CreateCallback('rsg-telegram:server:send', function(source, cb, data)
     local src = source
     local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player or type(data) ~= 'table' then return false end
-    if not isNearPostOffice(src) then return false end
+    if not Player or type(data) ~= 'table' or not isNearPostOffice(src) then return cb(false) end
 
     local senderCid = Player.PlayerData.citizenid
     local now = os.time()
     local last = sendCooldowns[senderCid]
     if last and now - last < Config.SendCooldown then
         notify(src, locale('sv_cooldown', Config.SendCooldown - (now - last)), 'error')
-        return false
+        return cb(false)
     end
 
     local subject = sanitize(data.subject, Config.MaxSubject)
@@ -218,12 +225,11 @@ lib.callback.register('rsg-telegram:server:send', function(source, data)
     local target  = validCid(data.citizenid) and data.citizenid or nil
     if not subject or not message or not target then
         notify(src, locale('sv_invalid'), 'error')
-        return false
+        return cb(false)
     end
-
     if target == senderCid then
         notify(src, locale('sv_self'), 'error')
-        return false
+        return cb(false)
     end
 
     -- claim the cooldown slot before yielding on the DB, so parallel requests can't slip through
@@ -233,93 +239,94 @@ lib.callback.register('rsg-telegram:server:send', function(source, data)
     if not row then
         sendCooldowns[senderCid] = last
         notify(src, locale('sv_no_recipient'), 'error')
-        return false
+        return cb(false)
     end
 
     if Config.SendCost > 0 and not Player.Functions.RemoveMoney(Config.MoneyType, Config.SendCost, 'telegram-sent') then
         sendCooldowns[senderCid] = last
         notify(src, locale('sv_no_money', Config.SendCost), 'error')
-        return false
+        return cb(false)
     end
 
-    local senderName    = fullName(Player.PlayerData.charinfo)
-    local recipientName = fullName(row.charinfo)
+    local senderName = fullName(Player.PlayerData.charinfo)
+    local delay = math.max(0, math.floor(Config.DeliveryDelay or 0))
 
-    local function deliver()
-        MySQL.insert.await(
-            'INSERT INTO rsg_telegrams (citizenid, recipient_name, sender_citizenid, sender_name, subject, message) VALUES (?, ?, ?, ?, ?, ?)',
-            { target, recipientName, senderCid, senderName, subject, message }
-        )
+    -- stored immediately (paid telegrams survive restarts); a future sent_at hides it until it "arrives"
+    local id = MySQL.insert.await(
+        'INSERT INTO rsg_telegrams (citizenid, recipient_name, sender_citizenid, sender_name, subject, message, sent_at) VALUES (?, ?, ?, ?, ?, ?, NOW() + INTERVAL ? SECOND)',
+        { target, fullName(row.charinfo), senderCid, senderName, subject, message, delay }
+    )
+    if not id then
+        if Config.SendCost > 0 then Player.Functions.AddMoney(Config.MoneyType, Config.SendCost, 'telegram-refund') end
+        sendCooldowns[senderCid] = last
+        notify(src, locale('sv_invalid'), 'error')
+        return cb(false)
+    end
+
+    SetTimeout(delay * 1000, function()
         local Target = RSGCore.Functions.GetPlayerByCitizenId(target)
-        if Target then
-            TriggerClientEvent('rsg-telegram:client:newTelegram', Target.PlayerData.source, senderName)
-        end
-    end
-
-    if Config.DeliveryDelay > 0 then
-        SetTimeout(Config.DeliveryDelay * 1000, deliver)
-    else
-        deliver()
-    end
+        if Target then TriggerClientEvent('rsg-telegram:client:newTelegram', Target.PlayerData.source, senderName) end
+    end)
 
     notify(src, locale('sv_sent'), 'success')
-    return true
+    cb(true)
 end)
 
 ---------------------------------
 -- address book
 ---------------------------------
-lib.callback.register('rsg-telegram:server:getContacts', function(source)
+RSGCore.Functions.CreateCallback('rsg-telegram:server:getContacts', function(source, cb)
     local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player then return {} end
-    return MySQL.query.await(
+    if not Player or not isNearPostOffice(source) then return cb({}) end
+    cb(MySQL.query.await(
         'SELECT contact_citizenid AS citizenid, contact_name AS name, nickname FROM rsg_telegram_contacts WHERE citizenid = ? ORDER BY COALESCE(nickname, contact_name) ASC',
         { Player.PlayerData.citizenid }
-    ) or {}
+    ) or {})
 end)
 
-lib.callback.register('rsg-telegram:server:addContact', function(source, data)
+RSGCore.Functions.CreateCallback('rsg-telegram:server:addContact', function(source, cb, data)
     local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player or type(data) ~= 'table' or not validCid(data.citizenid) then return false end
-    local owner = Player.PlayerData.citizenid
-    if data.citizenid == owner then
+    if not Player or type(data) ~= 'table' or not validCid(data.citizenid) or not isNearPostOffice(source) then return cb(false) end
+    if not throttle(source, 'contact', ACTION_THROTTLE) then return cb(false) end
+
+    local owner, contact = Player.PlayerData.citizenid, data.citizenid
+    if contact == owner then
         notify(source, locale('sv_self_contact'), 'error')
-        return false
+        return cb(false)
     end
 
-    local existing = MySQL.scalar.await('SELECT 1 FROM rsg_telegram_contacts WHERE citizenid = ? AND contact_citizenid = ?', { owner, data.citizenid })
+    local existing = MySQL.scalar.await('SELECT 1 FROM rsg_telegram_contacts WHERE citizenid = ? AND contact_citizenid = ?', { owner, contact })
     if not existing then
         local count = MySQL.scalar.await('SELECT COUNT(*) FROM rsg_telegram_contacts WHERE citizenid = ?', { owner }) or 0
         if count >= Config.MaxContacts then
             notify(source, locale('sv_contacts_full', Config.MaxContacts), 'error')
-            return false
+            return cb(false)
         end
     end
 
-    local row = MySQL.single.await('SELECT charinfo FROM players WHERE citizenid = ?', { data.citizenid })
+    local row = MySQL.single.await('SELECT charinfo FROM players WHERE citizenid = ?', { contact })
     if not row then
         notify(source, locale('sv_no_recipient'), 'error')
-        return false
+        return cb(false)
     end
 
-    local nickname = sanitize(data.nickname, 50)
     MySQL.insert.await(
         'INSERT INTO rsg_telegram_contacts (citizenid, contact_citizenid, contact_name, nickname) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE contact_name = VALUES(contact_name), nickname = VALUES(nickname)',
-        { owner, data.citizenid, fullName(row.charinfo), nickname }
+        { owner, contact, fullName(row.charinfo), sanitize(data.nickname, 50) }
     )
     notify(source, locale(existing and 'sv_contact_updated' or 'sv_contact_added'), 'success')
-    return true
+    cb(true)
 end)
 
-lib.callback.register('rsg-telegram:server:removeContact', function(source, citizenid)
+RSGCore.Functions.CreateCallback('rsg-telegram:server:removeContact', function(source, cb, citizenid)
     local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player or not validCid(citizenid) then return false end
+    if not Player or not validCid(citizenid) or not throttle(source, 'contact', ACTION_THROTTLE) then return cb(false) end
     local affected = MySQL.update.await('DELETE FROM rsg_telegram_contacts WHERE citizenid = ? AND contact_citizenid = ?', { Player.PlayerData.citizenid, citizenid })
     if affected and affected > 0 then
         notify(source, locale('sv_contact_removed'), 'inform')
-        return true
+        return cb(true)
     end
-    return false
+    cb(false)
 end)
 
 ---------------------------------
@@ -335,15 +342,15 @@ RegisterNetEvent('rsg-telegram:server:markRead', function(id)
     MySQL.update('UPDATE rsg_telegrams SET is_read = 1 WHERE id = ? AND citizenid = ? AND is_read = 0', { id, Player.PlayerData.citizenid })
 end)
 
-lib.callback.register('rsg-telegram:server:delete', function(source, id)
+RSGCore.Functions.CreateCallback('rsg-telegram:server:delete', function(source, cb, id)
     local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player or not validId(id) then return false end
-    local affected = MySQL.update.await('DELETE FROM rsg_telegrams WHERE id = ? AND citizenid = ?', { id, Player.PlayerData.citizenid })
+    if not Player or not validId(id) or not throttle(source, 'delete', ACTION_THROTTLE) then return cb(false) end
+    local affected = MySQL.update.await('DELETE FROM rsg_telegrams WHERE id = ? AND citizenid = ? AND sent_at <= NOW()', { id, Player.PlayerData.citizenid })
     if affected and affected > 0 then
         notify(source, locale('sv_deleted'), 'inform')
-        return true
+        return cb(true)
     end
-    return false
+    cb(false)
 end)
 
 ---------------------------------
@@ -353,7 +360,7 @@ AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
     if not Player or not Player.PlayerData then return end
     local src, cid = Player.PlayerData.source, Player.PlayerData.citizenid
     SetTimeout(5000, function()
-        local count = MySQL.scalar.await('SELECT COUNT(*) FROM rsg_telegrams WHERE citizenid = ? AND is_read = 0', { cid })
+        local count = MySQL.scalar.await('SELECT COUNT(*) FROM rsg_telegrams WHERE citizenid = ? AND is_read = 0 AND sent_at <= NOW()', { cid })
         if count and count > 0 and GetPlayerName(src) then
             notify(src, locale('sv_unread', count), 'inform')
         end
@@ -361,5 +368,5 @@ AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
 end)
 
 AddEventHandler('playerDropped', function()
-    searchCooldowns[source] = nil
+    throttles[source] = nil
 end)
