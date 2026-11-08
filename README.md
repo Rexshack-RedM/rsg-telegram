@@ -15,7 +15,6 @@ Telegram system for RSG Framework (RedM). Send and receive telegrams at any post
 
 ## Dependencies
 - rsg-core
-- ox_lib (locale loading only)
 - oxmysql
 
 ## Installation

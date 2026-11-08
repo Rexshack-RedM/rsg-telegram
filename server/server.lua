@@ -1,5 +1,4 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
-lib.locale()
 
 local sendCooldowns   = {} -- [citizenid] = os.time() of last send (survives relog)
 local throttles       = {} -- [src] = { [action] = GetGameTimer() }

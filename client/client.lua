@@ -1,5 +1,4 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
-lib.locale()
 
 local blips = {}
 local promptGroup = GetRandomIntInRange(0, 0xffffff)
@@ -56,7 +55,7 @@ local function openTelegrams(officeName)
         maxSubject = Config.MaxSubject,
         maxMessage = Config.MaxMessage,
         minSearch = Config.SearchMinChars,
-        locales = not sentLocales and lib.getLocales() or nil,
+        locales = not sentLocales and locale() or nil,
     })
     sentLocales = true
 end

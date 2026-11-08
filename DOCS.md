@@ -44,6 +44,11 @@ Client event `rsg-telegram:client:newTelegram(senderName)` shows the arrival not
 - Citizen IDs are pattern-validated; all queries are parameterised.
 
 ## Changelog
+### 3.1.1
+- Fully removed ox_lib: locales now load via `@rsg-core/shared/locale.lua`, `lib.locale()` calls dropped, NUI locale table from `locale()` (was `lib.getLocales()`)
+- `ox_lib` removed from fxmanifest dependencies
+- Set language with `setr rsg:locale "en"` in server.cfg
+
 ### 3.1.0
 - Converted `lib.callback`, `lib.notify`, `ox_lib:notify` and `cache.ped` to rsg-core (ox_lib now only loads locales)
 - Delayed telegrams are stored immediately (no longer lost on restart after paying)
