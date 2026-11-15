@@ -8,8 +8,12 @@ CREATE TABLE IF NOT EXISTS `rsg_telegrams` (
     `message` TEXT NOT NULL,
     `is_read` TINYINT(1) NOT NULL DEFAULT 0,
     `sent_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `batch` VARCHAR(40) NULL DEFAULT NULL,
+    `has_attachment` TINYINT(1) NOT NULL DEFAULT 0,
+    `attachment` TEXT NULL DEFAULT NULL,
     PRIMARY KEY (`id`),
-    INDEX `idx_citizenid` (`citizenid`)
+    INDEX `idx_citizenid` (`citizenid`),
+    INDEX `idx_sender` (`sender_citizenid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `rsg_telegram_contacts` (
@@ -21,4 +25,14 @@ CREATE TABLE IF NOT EXISTS `rsg_telegram_contacts` (
     `added_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uniq_contact` (`citizenid`, `contact_citizenid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `rsg_telegram_blocks` (
+    `id` INT(11) NOT NULL AUTO_INCREMENT,
+    `citizenid` VARCHAR(50) NOT NULL,
+    `blocked_citizenid` VARCHAR(50) NOT NULL,
+    `blocked_name` VARCHAR(100) NOT NULL,
+    `added_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_block` (`citizenid`, `blocked_citizenid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
