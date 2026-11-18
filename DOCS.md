@@ -360,3 +360,155 @@ if exports['rsg-telegram']:IsOpen() then exports['rsg-telegram']:Close() end
 
 ## Support
 https://buymeacoffee.com/rexshack
+
+<!-- BEGIN AUTO-REFERENCE (generated from the code; re-run the generator instead of editing by hand) -->
+
+## Technical reference
+
+Generated from the source of **rsg-telegram 3.2.0**. Names, arguments and defaults below are read straight from the code.
+
+### Dependencies
+
+`rsg-core`, `rsg-inventory`, `oxmysql`
+
+### Database
+
+Tables: `rsg_telegrams`, `rsg_telegram_contacts`, `rsg_telegram_blocks`.
+
+Tables are created automatically on start while `Config.AutoDatabase = true` (default). Nothing is ever dropped or overwritten.
+For a manual install set `Config.AutoDatabase = false` and import `installation/rsg-telegram.sql` once.
+
+```lua
+-- shared/config.lua
+Config.AutoDatabase = true -- false = import the SQL file yourself
+```
+
+### Configuration
+
+| Option | Default | Notes |
+|---|---|---|
+| `Config.Debug` | `false` |  |
+| `Config.AutoDatabase` | `true` | create / update the rsg_telegrams tables automatically on start |
+| `Config.PromptKey` | `0xF3830D8E` | [J] |
+| `Config.PromptDistance` | `2.0` |  |
+| `Config.SendCost` | `0.50` | cash cost to send a telegram (0 = free) |
+| `Config.MoneyType` | `'cash'` |  |
+| `Config.MaxSubject` | `50` |  |
+| `Config.MaxMessage` | `1000` |  |
+| `Config.MaxInbox` | `50` | max telegrams returned in the inbox |
+| `Config.SendCooldown` | `30` | seconds between telegrams per player |
+| `Config.DeliveryDelay` | `0` | seconds before the telegram arrives (0 = instant) |
+| `Config.SearchMinChars` | `2` |  |
+| `Config.MaxContacts` | `50` | max entries in a player's address book |
+| `Config.PurgeReadAfterDays` | `30` | delete READ telegrams older than this days (0 = keep forever); runs on start and every 6 hours |
+| `Config.PurgeUnreadAfterDays` | `0` | delete UNREAD telegrams older than this many days (0 = keep forever) |
+| `Config.MaxStoredPerPlayer` | `200` | most telegrams one character can hold; oldest are removed beyond this (0 = unlimited) |
+| `Config.DirectorySearch` | `true` | let players search all characters by name when writing / adding contacts |
+| `Config.SearchByCitizenId` | `true` | directory search also matches an exact citizen ID (set false to avoid exposing IDs) |
+| `Config.AllowPushToTalkWhileOpen` | `true` | The telegram UI keeps game input so voice keeps working; all other controls are blocked while it is open |
+| `Config.PushToTalkControls` | `table` |  |
+| `Config.API` | `table` |  |
+| `Config.Enabled` | `true` |  |
+| `Config.SystemSenderName` | `'Telegraph Office'` |  |
+| `Config.AccessSeconds` | `900` |  |
+| `Config.MaxSent` | `50` | sent telegrams listed in the Sent tab |
+| `Config.MaxBlocked` | `100` | block list size per character |
+| `Config.Receipts` | `table` |  |
+| `Config.NotifyDelivered` | `false` |  |
+| `Config.NotifyRead` | `false` |  |
+| `Config.Attachments` | `table` |  |
+| `Config.Fee` | `0.50` |  |
+| `Config.MaxCash` | `500` |  |
+| `Config.MaxItems` | `3` |  |
+| `Config.MaxItemAmount` | `20` |  |
+| `Config.BlockedItems` | `{ 'dollar', 'cent', 'blood_dollar', 'blood_cent' }` | unique items (items with their own data) and weapons can never be attached; these are blocked on top of that |
+| `Config.AllowedItems` | `{}` |  |
+| `Config.JobAddresses` | `table` |  |
+| `Config.MaxJobRecipients` | `25` |  |
+| `Config.PostOffices` | `table` |  |
+| `Config.Blip` | `table` |  |
+
+### Exports
+
+**Server**
+
+| Export | Arguments | File |
+|---|---|---|
+| `SendTelegram` | `recipient, subject, message, opts` | `server/api.lua` |
+| `GetTelegrams` | `citizen, opts` | `server/api.lua` |
+| `GetSentTelegrams` | `citizen, limit` | `server/api.lua` |
+| `GetUnreadCount` | `citizen` | `server/api.lua` |
+| `MarkRead` | `citizen, id` | `server/api.lua` |
+| `DeleteTelegram` | `citizen, id` | `server/api.lua` |
+| `DeleteReadTelegrams` | `citizen` | `server/api.lua` |
+| `GetContacts` | `citizen` | `server/api.lua` |
+| `AddContact` | `citizen, contact, nickname` | `server/api.lua` |
+| `RemoveContact` | `citizen, contact` | `server/api.lua` |
+| `GetBlocked` | `citizen` | `server/api.lua` |
+| `IsBlocked` | `citizen, sender` | `server/api.lua` |
+| `BlockCitizen` | `citizen, target` | `server/api.lua` |
+| `UnblockCitizen` | `citizen, target` | `server/api.lua` |
+| `OpenTelegrams` | `src, opts` | `server/api.lua` |
+
+**Client**
+
+| Export | Arguments | File |
+|---|---|---|
+| `IsOpen` | `` | `client/client.lua` |
+| `Close` | `` | `client/client.lua` |
+
+```lua
+-- example
+local result = exports['rsg-telegram']:SendTelegram(recipient, subject, message, opts)
+```
+
+### Callbacks
+
+| Callback | Side | Arguments | File |
+|---|---|---|---|
+| `rsg-telegram:server:getInbox` | server | `source, cb` | `server/server.lua` |
+| `rsg-telegram:server:getSent` | server | `source, cb` | `server/server.lua` |
+| `rsg-telegram:server:searchRecipients` | server | `source, cb, query` | `server/server.lua` |
+| `rsg-telegram:server:getAttachables` | server | `source, cb` | `server/server.lua` |
+| `rsg-telegram:server:send` | server | `source, cb, data` | `server/server.lua` |
+| `rsg-telegram:server:collect` | server | `source, cb, id` | `server/server.lua` |
+| `rsg-telegram:server:getContacts` | server | `source, cb` | `server/server.lua` |
+| `rsg-telegram:server:addContact` | server | `source, cb, data` | `server/server.lua` |
+| `rsg-telegram:server:removeContact` | server | `source, cb, citizenid` | `server/server.lua` |
+| `rsg-telegram:server:getBlocked` | server | `source, cb` | `server/server.lua` |
+| `rsg-telegram:server:block` | server | `source, cb, citizenid` | `server/server.lua` |
+| `rsg-telegram:server:unblock` | server | `source, cb, citizenid` | `server/server.lua` |
+| `rsg-telegram:server:delete` | server | `source, cb, id` | `server/server.lua` |
+| `rsg-telegram:server:markAllRead` | server | `source, cb` | `server/server.lua` |
+| `rsg-telegram:server:deleteRead` | server | `source, cb` | `server/server.lua` |
+
+```lua
+-- client side
+RSGCore.Functions.TriggerCallback('rsg-telegram:server:getInbox', function(result)
+    -- use result
+end)
+```
+
+### Events
+
+Server events can be fired by any client, so every handler re-validates the player, the arguments and any permission, distance or cooldown on the server. Never add a reward to a handler without those checks.
+
+| Event | Side | Arguments | File |
+|---|---|---|---|
+| `rsg-telegram:client:open` | client | `label, coords, radius` | `client/client.lua` |
+| `rsg-telegram:client:newTelegram` | client | `senderName` | `client/client.lua` |
+| `rsg-telegram:server:markRead` | server | `id` | `server/server.lua` |
+| `rsg-telegram:server:closed` | server | `` | `server/server.lua` |
+
+```lua
+-- from a client script
+TriggerServerEvent('rsg-telegram:server:markRead', id)
+-- from a server script
+TriggerClientEvent('rsg-telegram:client:open', source, label, coords, radius)
+```
+
+### Locales
+
+Language files in `locales/`: `de`, `el`, `en`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`. Set the language with `setr rsg:locale "en"`.
+
+<!-- END AUTO-REFERENCE -->
