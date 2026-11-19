@@ -22,7 +22,7 @@ Telegram system for RSG Framework (RedM). Send and receive telegrams at any post
 - Clipboard-and-old-paper look (typewriter font), UI fills 80% of the screen (fixed, not movable) with adjustable message text size (remembered per player)
 - Server API (exports + events) so other RSG scripts can send telegrams, read inboxes and manage contacts
 - Auto-creates and migrates its database tables (manual SQL in `installation/` still available)
-- Locales: en, de, el, es, fr, ja, nl, pl, pt-br, ro
+- Locales: en, de, el, es, fr, ja, nl, pl, pt-br, ro, ru
 
 ## Dependencies
 - rsg-core

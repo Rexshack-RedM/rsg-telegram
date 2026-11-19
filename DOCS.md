@@ -26,7 +26,7 @@ Technical reference for server owners and developers. For a short overview see [
 | `server/versionchecker.lua` | Checks the published version on start |
 | `client/client.lua` | Prompts, blips, NUI focus + push-to-talk whitelist, NUI callbacks, remote-open event |
 | `html/` | NUI: `index.html`, `style.css` (clipboard / old paper theme), `script.js` |
-| `locales/*.json` | `en`, `de`, `el`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro` (identical keys) |
+| `locales/*.json` | `en`, `de`, `el`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`, `ru` (identical keys) |
 | `installation/rsg-telegram.sql` | Manual schema, identical to the auto-created tables |
 
 Flow: the client opens the NUI (post office prompt, or the `OpenTelegrams` export) and every NUI action goes through an rsg-core callback. The server re-validates the player, the access grant, throttling and every argument before touching the database, so the UI is only a view.
@@ -325,7 +325,7 @@ if exports['rsg-telegram']:IsOpen() then exports['rsg-telegram']:Close() end
 - New table `rsg_telegram_blocks` and new `rsg_telegrams` columns (auto-migrated); `rsg-inventory` is now a dependency
 - UI now fills 80% of the screen and is fixed (no move/resize)
 - New look: a leather clipboard with a metal clip holding an aged paper sheet, typewriter font (Special Elite) for telegrams
-- 50 new locale keys in all 10 languages
+- 50 new locale keys in all 11 languages
 
 #### Audit and cleanup (part of 3.2.0)
 - Push-to-talk now works while the UI is open (`Config.AllowPushToTalkWhileOpen`, `Config.PushToTalkControls`); NUI focus is handled in one place
@@ -509,6 +509,6 @@ TriggerClientEvent('rsg-telegram:client:open', source, label, coords, radius)
 
 ### Locales
 
-Language files in `locales/`: `de`, `el`, `en`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`. Set the language with `setr rsg:locale "en"`.
+Language files in `locales/`: `de`, `el`, `en`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`, `ru`. Set the language with `setr rsg:locale "en"`.
 
 <!-- END AUTO-REFERENCE -->
