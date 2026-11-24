@@ -110,12 +110,6 @@ input:focus, textarea:focus { border-color: var(--rdr-gold); box-shadow: 0 0 0 2
 @keyframes toastIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes toastOut { to { opacity: 0; transform: translateX(30px); } }
 
-.resize-handle { position: absolute; right: 2px; bottom: 2px; width: 16px; height: 16px; cursor: nwse-resize; opacity: 0.6;
-    background: linear-gradient(135deg, transparent 0 45%, var(--rdr-gold-dim) 45% 52%, transparent 52% 65%, var(--rdr-gold-dim) 65% 72%, transparent 72%); }
-.resize-handle:hover { opacity: 1; }
-body.dragging, body.dragging * { cursor: move !important; }
-body.resizing, body.resizing * { cursor: nwse-resize !important; }
-
 .toolbar-btns { display: flex; gap: 8px; }
 .toolbar-btns .wood-btn { padding: 8px 11px; }
 .contacts-head { margin-top: 14px; }
@@ -169,7 +163,6 @@ body.resizing, body.resizing * { cursor: nwse-resize !important; }
 .stepper button:disabled { opacity: 0.4; cursor: not-allowed; }
 .stepper span { min-width: 18px; text-align: center; font-weight: 600; }
 
-.resize-handle { display: none !important; }
 
 /* ---------- clipboard + old paper theme ---------- */
 .panel { padding: 46px 26px 26px;
@@ -223,3 +216,21 @@ body.resizing, body.resizing * { cursor: nwse-resize !important; }
 /* message paper: ruled lines sit exactly under each text line (22px line height, anchored to the text box and scrolling with it) */
 .sheet textarea { line-height: 22px; padding: 4px 11px; background-origin: content-box; background-attachment: local; background-clip: border-box;
     background-image: repeating-linear-gradient(180deg, transparent 0 21px, rgba(110,80,40,0.4) 21px 22px); background-color: rgba(255,255,255,0.4); }
+
+/* inbox search, anonymous toggle, load more */
+.search-row { margin: 6px 0 8px; }
+.search-row input { padding: 7px 10px; font-size: 12px; }
+.anon-row { margin: 8px 0 2px; }
+.anon-row .tab.active { color: var(--rdr-text); }
+.load-more { display: flex; justify-content: center; padding: 8px 0 2px; }
+.pill.notice { border-color: var(--rdr-amber); color: var(--rdr-amber); }
+
+/* unread badge: an envelope with the count, never takes focus */
+.mail-badge { position: fixed; z-index: 5; display: flex; align-items: center; gap: 7px; padding: 6px 12px; pointer-events: none;
+    background: linear-gradient(160deg, var(--rdr-panel-2), var(--rdr-panel) 60%, var(--rdr-black)); border: 1px solid var(--rdr-gold-dim); border-radius: 3px;
+    box-shadow: 0 6px 18px var(--rdr-shadow); font-size: 13px; letter-spacing: 1px; color: var(--rdr-text); animation: toastIn 0.25s ease; }
+.mail-badge .mail-ico { font-size: 16px; }
+.mail-badge.top-right { top: 1.6vh; right: 1.4vw; }
+.mail-badge.top-left { top: 1.6vh; left: 1.4vw; }
+.mail-badge.bottom-right { bottom: 1.6vh; right: 1.4vw; }
+.mail-badge.bottom-left { bottom: 1.6vh; left: 1.4vw; }

@@ -1,5 +1,8 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
 
+TelegramMailboxes = {}   -- [id] = { id, x, y, z, heading, label } (filled by server/mailbox.lua)
+local unlisted        = {} -- [citizenid] = true: hidden from the directory search
+local noticeCooldowns = {} -- [citizenid] = os.time() of the last /notice
 local sendCooldowns   = {} -- [citizenid] = os.time() of last send (survives relog)
 local throttles       = {} -- [src] = { [action] = GetGameTimer() }
 local SEARCH_THROTTLE = 500 -- ms between directory searches per player
@@ -25,9 +28,15 @@ local tables = {
             { name = 'batch',            def = 'VARCHAR(40) NULL DEFAULT NULL' },
             { name = 'has_attachment',   def = 'TINYINT(1) NOT NULL DEFAULT 0' },
             { name = 'attachment',       def = 'TEXT NULL DEFAULT NULL' },
+            { name = 'anonymous',        def = 'TINYINT(1) NOT NULL DEFAULT 0' },
+            { name = 'silenced',         def = 'TINYINT(1) NOT NULL DEFAULT 0' }, -- copy for a recipient who blocked the sender: kept for the Sent tab only
+            { name = 'kind',             def = 'VARCHAR(20) NULL DEFAULT NULL' },  -- notice | broadcast
         },
         extra = { 'PRIMARY KEY (`id`)', 'INDEX `idx_citizenid` (`citizenid`)' },
-        indexes = { { name = 'idx_sender', def = 'INDEX `idx_sender` (`sender_citizenid`)' } }, -- Sent tab
+        indexes = {
+            { name = 'idx_sender', def = 'INDEX `idx_sender` (`sender_citizenid`)' },        -- Sent tab
+            { name = 'idx_inbox',  def = 'INDEX `idx_inbox` (`citizenid`, `sent_at`)' },             -- inbox, trimming
+        },
     },
     rsg_telegram_contacts = {
         legacy = { 'rex_telegram_contacts', 'telegram_contacts' },
@@ -48,8 +57,29 @@ local tables = {
             { name = 'blocked_citizenid', def = 'VARCHAR(50) NOT NULL' },
             { name = 'blocked_name',      def = 'VARCHAR(100) NOT NULL' },
             { name = 'added_at',          def = 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' },
+            { name = 'anonymous',         def = 'TINYINT(1) NOT NULL DEFAULT 0' }, -- blocked through an anonymous telegram: identity stays hidden
         },
         extra = { 'PRIMARY KEY (`id`)', 'UNIQUE KEY `uniq_block` (`citizenid`, `blocked_citizenid`)' },
+    },
+    rsg_telegram_settings = {
+        columns = {
+            { name = 'citizenid', def = 'VARCHAR(50) NOT NULL' },
+            { name = 'unlisted',  def = 'TINYINT(1) NOT NULL DEFAULT 0' },
+        },
+        extra = { 'PRIMARY KEY (`citizenid`)' },
+    },
+    rsg_telegram_mailboxes = {
+        columns = {
+            { name = 'id',         def = 'INT(11) NOT NULL AUTO_INCREMENT' },
+            { name = 'label',      def = 'VARCHAR(64) NULL DEFAULT NULL' },
+            { name = 'x',          def = 'DOUBLE NOT NULL' },
+            { name = 'y',          def = 'DOUBLE NOT NULL' },
+            { name = 'z',          def = 'DOUBLE NOT NULL' },
+            { name = 'heading',    def = 'DOUBLE NOT NULL DEFAULT 0' },
+            { name = 'created_by', def = 'VARCHAR(50) NULL DEFAULT NULL' },
+            { name = 'created_at', def = 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' },
+        },
+        extra = { 'PRIMARY KEY (`id`)' },
     },
 }
 
@@ -131,22 +161,36 @@ end
 
 local PURGE_INTERVAL = 6 * 60 * 60 * 1000 -- ms between old-telegram purges while the server is running
 local SYSTEM_CID     = 'SYSTEM'           -- sender id of telegrams sent by scripts without a character
+local ANON_CID       = 'ANON'             -- what the client sees instead of an anonymous sender's citizen id
 local AT             = Config.Attachments or { Enabled = false }
 
 local jobColumnOk = false -- players.job exists (needed for job addresses)
+local jobTableOk  = false -- player_jobs exists (rsg-core multi-job; lets job addresses reach offline secondary-job holders)
+local dbReady     = false
+local readyHooks  = {}
 local access = {}         -- [src] = os.time() until which the UI may be used away from a post office (OpenTelegrams export)
 
 local function purgeOld()
     -- telegrams that still carry an unclaimed attachment are never purged
     local readDays   = Config.PurgeReadAfterDays or 0
     local unreadDays = Config.PurgeUnreadAfterDays or 0
-    if readDays > 0 then
+    if readDays > 0 then -- silenced copies (is_read = 1) age out with the read ones
         local removed = MySQL.update.await('DELETE FROM rsg_telegrams WHERE is_read = 1 AND attachment IS NULL AND sent_at < (NOW() - INTERVAL ? DAY)', { readDays })
         if removed and removed > 0 then dbLog(('Purged %d old read telegrams'):format(removed)) end
     end
     if unreadDays > 0 then
-        local removed = MySQL.update.await('DELETE FROM rsg_telegrams WHERE is_read = 0 AND attachment IS NULL AND sent_at < (NOW() - INTERVAL ? DAY)', { unreadDays })
+        local removed = MySQL.update.await('DELETE FROM rsg_telegrams WHERE is_read = 0 AND silenced = 0 AND attachment IS NULL AND sent_at < (NOW() - INTERVAL ? DAY)', { unreadDays })
         if removed and removed > 0 then dbLog(('Purged %d old unread telegrams'):format(removed)) end
+    end
+    -- everything that belongs to characters that were deleted from the players table
+    if Config.PurgeDeletedCharacters then
+        local days = math.max(1, Config.PurgeDeletedAfterDays or 7)
+        local gone = "NOT EXISTS (SELECT 1 FROM players p WHERE p.citizenid COLLATE utf8mb4_general_ci = %s.citizenid COLLATE utf8mb4_general_ci)"
+        local removed = MySQL.update.await(('DELETE FROM rsg_telegrams WHERE sent_at < (NOW() - INTERVAL ? DAY) AND %s'):format(gone:format('rsg_telegrams')), { days })
+        if removed and removed > 0 then dbLog(('Purged %d telegrams of deleted characters'):format(removed)) end
+        for _, t in ipairs({ 'rsg_telegram_contacts', 'rsg_telegram_blocks', 'rsg_telegram_settings' }) do
+            MySQL.update.await(('DELETE FROM %s WHERE %s'):format(t, gone:format(t)))
+        end
     end
 end
 
@@ -165,8 +209,18 @@ MySQL.ready(function()
         dbLog('Config.JobAddresses is set but the players table has no `job` column - job addresses are disabled', '^3')
     end
 
+    local okT, countT = pcall(MySQL.scalar.await,
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'player_jobs'")
+    jobTableOk = okT and (countT or 0) > 0
+
+    local okU, rowsU = pcall(MySQL.query.await, 'SELECT citizenid FROM rsg_telegram_settings WHERE unlisted = 1')
+    if okU then for _, r in ipairs(rowsU or {}) do unlisted[r.citizenid] = true end end
+
     local purged, err = pcall(purgeOld)
     if not purged then dbLog(('Purge failed: %s'):format(tostring(err)), '^1') end
+
+    dbReady = true
+    for _, fn in ipairs(readyHooks) do fn() end
 end)
 
 -- keep purging on long-running servers (it used to only run on resource start)
@@ -175,6 +229,11 @@ CreateThread(function()
         Wait(PURGE_INTERVAL)
         local ok, err = pcall(purgeOld)
         if not ok then dbLog(('Purge failed: %s'):format(tostring(err)), '^1') end
+        -- forget expired send cooldowns (they are keyed by citizen id and would otherwise only grow)
+        local now = os.time()
+        for cid, at in pairs(sendCooldowns) do
+            if now - at >= (Config.SendCooldown or 0) then sendCooldowns[cid] = nil end
+        end
     end
 end)
 
@@ -207,7 +266,9 @@ end
 local function sanitize(str, max)
     if type(str) ~= 'string' then return nil end
     str = str:gsub('[%z\1-\8\11\12\14-\31\127<>]', '')
-             :gsub('\226\128[\139-\143\170-\174]', '') -- U+200B-200F, U+202A-202E
+             :gsub('\226\128[\139-\143\168-\174]', '') -- U+200B-200F, U+2028-202E
+             :gsub('\239\187\191', '')                 -- U+FEFF (zero-width no-break space)
+             :gsub('\194[\128-\159]', '')              -- C1 control characters
              :gsub('\226\129[\166-\169]', '')          -- U+2066-2069
              :gsub('^%s+', ''):gsub('%s+$', '')
     if #str == 0 or utf8.len(str) == nil or utf8.len(str) > max then return nil end
@@ -222,13 +283,26 @@ local function validId(id)
     return math.type(id) == 'integer' and id > 0
 end
 
-local function isNearPostOffice(src)
+-- the post office the player is standing at (nil at a mailbox / elsewhere)
+local function nearestOffice(src)
     local ped = GetPlayerPed(src)
-    if ped == 0 then return false end
+    if ped == 0 then return nil end
     local pos = GetEntityCoords(ped)
     local range = Config.PromptDistance + 3.0
     for _, office in ipairs(Config.PostOffices) do
-        if #(pos - office.coords) <= range then return true end
+        if #(pos - office.coords) <= range then return office end
+    end
+    return nil
+end
+
+local function isNearPostOffice(src)
+    if nearestOffice(src) then return true end
+    local ped = GetPlayerPed(src)
+    if ped == 0 then return false end
+    local pos = GetEntityCoords(ped)
+    local range = ((Config.Mailbox and Config.Mailbox.Distance) or 2.0) + 3.0
+    for _, mb in pairs(TelegramMailboxes) do
+        if #(pos - vector3(mb.x, mb.y, mb.z)) <= range then return true end
     end
     return false
 end
@@ -262,6 +336,17 @@ for _, n in ipairs(AT.BlockedItems or {}) do blockedItems[n] = true end
 if AT.AllowedItems and #AT.AllowedItems > 0 then
     allowedItems = {}
     for _, n in ipairs(AT.AllowedItems) do allowedItems[n] = true end
+end
+
+-- attaching would reset the item's decay (it is re-added as a fresh stack), so partly decayed stacks are refused
+local function hasDecayedStack(Player, name)
+    for _, item in pairs(Player.PlayerData.items or {}) do
+        if type(item) == 'table' and item.name == name and type(item.info) == 'table' then
+            local q = tonumber(item.info.quality)
+            if q and q < 100 then return true end
+        end
+    end
+    return false
 end
 
 local function itemAttachable(name)
@@ -314,6 +399,7 @@ local function checkAttachment(src, Player, raw)
     if att == nil then return nil end
     if att.cash and Player.Functions.GetMoney('cash') < att.cash then return nil, 'sv_attach_no_cash' end
     for _, it in ipairs(att.items) do
+        if hasDecayedStack(Player, it.name) then return nil, 'sv_attach_invalid' end
         if not exports['rsg-inventory']:HasItem(src, it.name, it.amount) then return nil, 'sv_attach_no_item' end
     end
     return att
@@ -365,12 +451,23 @@ local function getCharName(cid)
 end
 
 -- telegrams with a future sent_at are still "in transit" and never listed
-local function getInbox(cid, limit, unreadOnly)
-    local sql = 'SELECT id, sender_citizenid, sender_name, subject, message, is_read, has_attachment, attachment, UNIX_TIMESTAMP(sent_at) AS sent_at FROM rsg_telegrams WHERE citizenid = ? AND sent_at <= NOW()'
+-- offset / query are optional (UI paging and search). Anonymous senders are never revealed to the client.
+local function getInbox(cid, limit, unreadOnly, offset, query)
+    local params = { cid }
+    local sql = 'SELECT id, sender_citizenid, sender_name, subject, message, is_read, has_attachment, attachment, anonymous, kind, UNIX_TIMESTAMP(sent_at) AS sent_at FROM rsg_telegrams WHERE citizenid = ? AND silenced = 0 AND sent_at <= NOW()'
         .. (unreadOnly and ' AND is_read = 0' or '')
-        .. ' ORDER BY sent_at DESC, id DESC LIMIT ?'
-    local rows = MySQL.query.await(sql, { cid, limit }) or {}
-    for i = 1, #rows do rows[i].attachment = decodeAttachment(rows[i].attachment) end
+    if query and query ~= '' then
+        sql = sql .. ' AND (subject LIKE ? OR sender_name LIKE ? OR message LIKE ?)'
+        local like = '%' .. query .. '%'
+        params[#params + 1] = like; params[#params + 1] = like; params[#params + 1] = like
+    end
+    sql = sql .. ' ORDER BY sent_at DESC, id DESC LIMIT ? OFFSET ?'
+    params[#params + 1] = limit; params[#params + 1] = offset or 0
+    local rows = MySQL.query.await(sql, params) or {}
+    for i = 1, #rows do
+        rows[i].attachment = decodeAttachment(rows[i].attachment)
+        if rows[i].anonymous == 1 then rows[i].sender_citizenid = ANON_CID end
+    end
     return rows
 end
 
@@ -381,7 +478,7 @@ local function getSent(cid, limit)
         SELECT MIN(id) AS id, MAX(subject) AS subject, MAX(message) AS message, MAX(recipient_name) AS recipient_name,
                UNIX_TIMESTAMP(MIN(sent_at)) AS sent_at, COUNT(*) AS recipients,
                CAST(SUM(sent_at <= NOW()) AS UNSIGNED) AS delivered,
-               CAST(SUM(is_read) AS UNSIGNED) AS read_count,
+               CAST(SUM(IF(silenced = 0, is_read, 0)) AS UNSIGNED) AS read_count,
                MAX(has_attachment) AS has_attachment,
                CAST(SUM(attachment IS NOT NULL) AS UNSIGNED) AS unclaimed
         FROM rsg_telegrams WHERE sender_citizenid = ?
@@ -395,7 +492,13 @@ local function getSent(cid, limit)
 end
 
 local function getUnreadCount(cid)
-    return MySQL.scalar.await('SELECT COUNT(*) FROM rsg_telegrams WHERE citizenid = ? AND is_read = 0 AND sent_at <= NOW()', { cid }) or 0
+    return MySQL.scalar.await('SELECT COUNT(*) FROM rsg_telegrams WHERE citizenid = ? AND is_read = 0 AND silenced = 0 AND sent_at <= NOW()', { cid }) or 0
+end
+
+-- tells an online character how many unread telegrams they have (drives the on-screen badge)
+local function pushUnread(cid)
+    local P = RSGCore.Functions.GetPlayerByCitizenId(cid)
+    if P then TriggerClientEvent('rsg-telegram:client:unread', P.PlayerData.source, getUnreadCount(cid)) end
 end
 
 -- id = nil marks everything read; returns how many rows changed
@@ -408,7 +511,7 @@ end
 
 -- returns true, or false + 'attachment' when it still carries something to collect
 local function deleteTelegram(cid, id)
-    local affected = MySQL.update.await('DELETE FROM rsg_telegrams WHERE id = ? AND citizenid = ? AND sent_at <= NOW() AND attachment IS NULL', { id, cid })
+    local affected = MySQL.update.await('DELETE FROM rsg_telegrams WHERE id = ? AND citizenid = ? AND silenced = 0 AND sent_at <= NOW() AND attachment IS NULL', { id, cid })
     if affected and affected > 0 then return true end
     local held = MySQL.scalar.await('SELECT 1 FROM rsg_telegrams WHERE id = ? AND citizenid = ? AND attachment IS NOT NULL', { id, cid })
     return false, held and 'attachment' or nil
@@ -416,7 +519,7 @@ end
 
 -- destroys every delivered, read telegram that has nothing left to collect; returns the count
 local function deleteRead(cid)
-    return MySQL.update.await('DELETE FROM rsg_telegrams WHERE citizenid = ? AND is_read = 1 AND sent_at <= NOW() AND attachment IS NULL', { cid }) or 0
+    return MySQL.update.await('DELETE FROM rsg_telegrams WHERE citizenid = ? AND is_read = 1 AND silenced = 0 AND sent_at <= NOW() AND attachment IS NULL', { cid }) or 0
 end
 
 local function getContacts(cid)
@@ -464,24 +567,39 @@ local function isBlocked(owner, sender)
     return MySQL.scalar.await('SELECT 1 FROM rsg_telegram_blocks WHERE citizenid = ? AND blocked_citizenid = ?', { owner, sender }) ~= nil
 end
 
+-- anonymous blocks hide the citizen id (the client unblocks them by row id instead)
 local function getBlocked(cid)
-    return MySQL.query.await('SELECT blocked_citizenid AS citizenid, blocked_name AS name FROM rsg_telegram_blocks WHERE citizenid = ? ORDER BY blocked_name ASC', { cid }) or {}
+    return MySQL.query.await('SELECT id, IF(anonymous = 1, NULL, blocked_citizenid) AS citizenid, blocked_name AS name, anonymous FROM rsg_telegram_blocks WHERE citizenid = ? ORDER BY blocked_name ASC', { cid }) or {}
 end
 
 -- returns true, 'added' | 'already'   or   false, 'self' | 'blocks_full' | 'not_found'
-local function addBlock(owner, target)
+local function addBlock(owner, target, anonymous)
     if target == owner then return false, 'self' end
     if isBlocked(owner, target) then return true, 'already' end
     local count = MySQL.scalar.await('SELECT COUNT(*) FROM rsg_telegram_blocks WHERE citizenid = ?', { owner }) or 0
     if count >= (Config.MaxBlocked or 100) then return false, 'blocks_full' end
     local name = getCharName(target)
     if not name then return false, 'not_found' end
-    MySQL.insert.await('INSERT INTO rsg_telegram_blocks (citizenid, blocked_citizenid, blocked_name) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE blocked_name = VALUES(blocked_name)', { owner, target, name })
+    if anonymous then name = locale('sv_anonymous') end
+    MySQL.insert.await('INSERT INTO rsg_telegram_blocks (citizenid, blocked_citizenid, blocked_name, anonymous) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE blocked_name = VALUES(blocked_name)', { owner, target, name, anonymous and 1 or 0 })
     return true, 'added'
 end
 
+-- blocks the real sender of one of the owner's telegrams (used for anonymous senders; the client never learns who it is)
+local function blockFromTelegram(owner, telegramId)
+    local row = MySQL.single.await('SELECT sender_citizenid, anonymous FROM rsg_telegrams WHERE id = ? AND citizenid = ? AND silenced = 0', { telegramId, owner })
+    if not row or row.sender_citizenid == SYSTEM_CID then return false, 'not_found' end
+    return addBlock(owner, row.sender_citizenid, row.anonymous == 1)
+end
+
+-- target is a citizen id (string) or the id of the block row (number, used for anonymous blocks)
 local function removeBlock(owner, target)
-    local affected = MySQL.update.await('DELETE FROM rsg_telegram_blocks WHERE citizenid = ? AND blocked_citizenid = ?', { owner, target })
+    local affected
+    if math.type(target) == 'integer' then
+        affected = MySQL.update.await('DELETE FROM rsg_telegram_blocks WHERE citizenid = ? AND id = ?', { owner, target })
+    else
+        affected = MySQL.update.await('DELETE FROM rsg_telegram_blocks WHERE citizenid = ? AND blocked_citizenid = ? AND anonymous = 0', { owner, target })
+    end
     return affected ~= nil and affected > 0
 end
 
@@ -514,24 +632,45 @@ local function getJobMembers(job, excludeCid)
             end
         end
     end
+    -- offline characters who hold the job as a secondary job (rsg-core multi-job)
+    if jobTableOk and #members < limit then
+        local ok, rows = pcall(MySQL.query.await,
+            [[SELECT p.citizenid, p.charinfo FROM player_jobs pj JOIN players p ON p.citizenid = pj.citizenid
+              WHERE pj.job = ? AND pj.citizenid <> ? LIMIT ?]], { job, excludeCid, limit })
+        for _, r in ipairs(ok and rows or {}) do
+            if not seen[r.citizenid] and #members < limit then
+                seen[r.citizenid] = true
+                members[#members + 1] = { citizenid = r.citizenid, name = fullName(r.charinfo) }
+            end
+        end
+    end
     return members
 end
 
 -- stores a telegram and schedules its arrival. Returns the new id, or nil if the insert failed.
 -- Stored immediately (paid telegrams survive restarts); a future sent_at hides it until it "arrives".
--- extra = { batch = 'id shared by every copy of one send', attachment = '<json>' }
+-- extra = { batch = 'id shared by every copy of one send', attachment = '<json>', anonymous = bool,
+--           kind = 'notice' | 'broadcast', silenced = bool (recipient blocked the sender: stored for the Sent tab only),
+--           claimed = bool (silenced copy that pretends its attachment was already collected) }
 local function storeTelegram(senderCid, senderName, target, targetName, subject, message, delay, silent, extra)
     delay = math.max(0, math.floor(tonumber(delay) or 0))
     extra = extra or {}
 
     local cols = { 'citizenid', 'recipient_name', 'sender_citizenid', 'sender_name', 'subject', 'message' }
     local vals = { target, targetName, senderCid, senderName, subject, message }
-    if extra.batch then
-        cols[#cols + 1] = 'batch';          vals[#vals + 1] = extra.batch
-    end
+    local function add(col, val) cols[#cols + 1] = col; vals[#vals + 1] = val end
+    if extra.batch then add('batch', extra.batch) end
     if extra.attachment then
-        cols[#cols + 1] = 'has_attachment'; vals[#vals + 1] = 1
-        cols[#cols + 1] = 'attachment';     vals[#vals + 1] = extra.attachment
+        add('has_attachment', 1)
+        add('attachment', extra.attachment)
+    elseif extra.claimed then
+        add('has_attachment', 1)
+    end
+    if extra.anonymous then add('anonymous', 1) end
+    if extra.kind then add('kind', extra.kind) end
+    if extra.silenced then
+        add('silenced', 1)
+        add('is_read', 1) -- never counted as unread, purged with the read ones
     end
     vals[#vals + 1] = delay
     local id = MySQL.insert.await(
@@ -540,33 +679,36 @@ local function storeTelegram(senderCid, senderName, target, targetName, subject,
     )
     if not id then return nil end
 
-    -- cap what a single character can hold (stops inbox flooding / table bloat); oldest go first,
-    -- telegrams with something left to collect are never trimmed
-    local cap = Config.MaxStoredPerPlayer or 0
-    if cap > 0 then
-        MySQL.update(
-            'DELETE FROM rsg_telegrams WHERE citizenid = ? AND attachment IS NULL AND id NOT IN (SELECT id FROM (SELECT id FROM rsg_telegrams WHERE citizenid = ? ORDER BY sent_at DESC, id DESC LIMIT ?) AS keep)',
-            { target, target, cap }
-        )
-    end
-
     local info = {
         id = id, recipient = target, recipientName = targetName,
         sender = senderCid, senderName = senderName, subject = subject, delay = delay,
         hasAttachment = extra.attachment ~= nil,
     }
-    TriggerEvent('rsg-telegram:server:telegramSent', info)
+
+    -- cap what a single character can hold (stops inbox flooding / table bloat). Unread telegrams are kept
+    -- first, then the newest; telegrams with something left to collect are never trimmed
+    local cap = Config.MaxStoredPerPlayer or 0
+    if cap > 0 and not extra.silenced then
+        MySQL.update(
+            'DELETE FROM rsg_telegrams WHERE citizenid = ? AND silenced = 0 AND attachment IS NULL AND id NOT IN (SELECT id FROM (SELECT id FROM rsg_telegrams WHERE citizenid = ? AND silenced = 0 ORDER BY is_read ASC, sent_at DESC, id DESC LIMIT ?) AS keep)',
+            { target, target, cap }
+        )
+    end
+
+    if not extra.silenced then TriggerEvent('rsg-telegram:server:telegramSent', info) end
 
     SetTimeout(delay * 1000, function()
-        if not silent then
+        if not extra.silenced then
             local Target = RSGCore.Functions.GetPlayerByCitizenId(target)
-            if Target then TriggerClientEvent('rsg-telegram:client:newTelegram', Target.PlayerData.source, senderName) end
+            if Target and not silent then TriggerClientEvent('rsg-telegram:client:newTelegram', Target.PlayerData.source, senderName) end
+            if Target then pushUnread(target) end
         end
+        -- silenced copies report delivery too, so a blocked sender sees exactly what an unblocked one would
         if receipts().Enabled and receipts().NotifyDelivered and not extra.batch and senderCid ~= SYSTEM_CID then
             local Sender = RSGCore.Functions.GetPlayerByCitizenId(senderCid)
             if Sender then notify(Sender.PlayerData.source, locale('sv_receipt_delivered', targetName)) end
         end
-        TriggerEvent('rsg-telegram:server:telegramDelivered', info)
+        if not extra.silenced then TriggerEvent('rsg-telegram:server:telegramDelivered', info) end
     end)
 
     return id
@@ -613,19 +755,36 @@ TelegramInternal = {
     getContacts = getContacts, addContact = addContact, removeContact = removeContact,
     isBlocked = isBlocked, getBlocked = getBlocked, addBlock = addBlock, removeBlock = removeBlock,
     normaliseAttachment = normaliseAttachment,
-    grantAccess = grantAccess,
+    grantAccess = grantAccess, pushUnread = pushUnread,
     store = storeTelegram,
+    onReady = function(fn) if dbReady then fn() else readyHooks[#readyHooks + 1] = fn end end,
 }
 
 ---------------------------------
 -- inbox / sent
 ---------------------------------
 -- callbacks answer `false` when throttled so the UI keeps what it already shows
-RSGCore.Functions.CreateCallback('rsg-telegram:server:getInbox', function(source, cb)
+
+-- cuts a search text to `max` characters (never in the middle of one) and removes LIKE wildcards.
+-- Returns the text and its length in characters, or nil when it is unusable.
+local function cleanQuery(query, max)
+    if type(query) ~= 'string' then return nil end
+    query = query:gsub('[%%_<>\\]', '')
+    local chars = utf8.len(query)
+    if not chars then return nil end
+    if chars > max then query = query:sub(1, utf8.offset(query, max + 1) - 1) end
+    return query, math.min(chars, max)
+end
+
+-- data (optional) = { offset = n, query = 'text' } for paging and searching the inbox
+RSGCore.Functions.CreateCallback('rsg-telegram:server:getInbox', function(source, cb, data)
     local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player or not canUseUI(source) then return cb({}) end
+    if not Player or not canUseUI(source) then return cb(false) end -- false: the client does not open the UI
     if not throttle(source, 'inbox', READ_THROTTLE) then return cb(false) end
-    cb(getInbox(Player.PlayerData.citizenid, Config.MaxInbox))
+    data = type(data) == 'table' and data or {}
+    local offset = math.max(0, math.min(5000, math.tointeger(tonumber(data.offset)) or 0))
+    local query = data.query ~= nil and cleanQuery(data.query, 40) or nil
+    cb(getInbox(Player.PlayerData.citizenid, math.max(1, math.min(Config.InboxPageSize or 25, 100)), false, offset, query))
 end)
 
 RSGCore.Functions.CreateCallback('rsg-telegram:server:getSent', function(source, cb)
@@ -643,14 +802,15 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:searchRecipients', functio
     if not Player or type(query) ~= 'string' or not Config.DirectorySearch or not canUseUI(source) then return cb({}) end
     if not throttle(source, 'search', SEARCH_THROTTLE) then return cb(false) end
 
-    query = query:gsub('[%%_<>\\]', ''):sub(1, 40)
-    if #query < Config.SearchMinChars then return cb({}) end
+    local chars
+    query, chars = cleanQuery(query, 40)
+    if not query or chars < Config.SearchMinChars then return cb({}) end
 
     local sql = [[
         SELECT citizenid, charinfo FROM players
         WHERE citizenid <> ?
           AND ( CONCAT(JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.firstname')), ' ', JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.lastname'))) LIKE ?%s )
-        LIMIT 10
+        LIMIT 25
     ]]
     local params = { Player.PlayerData.citizenid, '%' .. query .. '%' }
     if Config.SearchByCitizenId then
@@ -663,7 +823,10 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:searchRecipients', functio
     local rows = MySQL.query.await(sql, params) or {}
     local results = {}
     for i = 1, #rows do
-        results[i] = { citizenid = rows[i].citizenid, name = fullName(rows[i].charinfo) }
+        -- characters that chose to be unlisted never show up, even by exact citizen id
+        if not unlisted[rows[i].citizenid] and #results < 10 then
+            results[#results + 1] = { citizenid = rows[i].citizenid, name = fullName(rows[i].charinfo) }
+        end
     end
     cb(results)
 end)
@@ -678,7 +841,7 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:getAttachables', function(
 
     local totals, order = {}, {}
     for _, item in pairs(Player.PlayerData.items or {}) do
-        if type(item) == 'table' and item.name and itemAttachable(item.name) then
+        if type(item) == 'table' and item.name and itemAttachable(item.name) and not hasDecayedStack(Player, item.name) then
             if not totals[item.name] then
                 totals[item.name] = 0
                 order[#order + 1] = item.name
@@ -701,6 +864,47 @@ end)
 ---------------------------------
 local function newBatch()
     return ('%d%d'):format(os.time(), math.random(100000, 999999))
+end
+
+-- seconds a telegram to `targetCid` takes: Config.DeliveryDelay, plus the distance between sender and recipient
+-- when Config.DeliveryDistance is on (only for recipients who are online)
+local function deliveryDelay(src, targetCid)
+    local delay = Config.DeliveryDelay or 0
+    local D = Config.DeliveryDistance
+    if D and D.Enabled then
+        local Target = RSGCore.Functions.GetPlayerByCitizenId(targetCid)
+        if Target then
+            local from, to = GetPlayerPed(src), GetPlayerPed(Target.PlayerData.source)
+            if from ~= 0 and to ~= 0 then
+                local km = #(GetEntityCoords(from) - GetEntityCoords(to)) / 1000.0
+                delay = delay + math.min(D.Max or 180, km * (D.SecondsPerKm or 20))
+            end
+        end
+    end
+    return math.floor(delay)
+end
+
+local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
+
+-- price of this send: the base fee, or an rsg-economy quote (tax + treasury) at a post office with a region
+local function priceFor(src, fee)
+    local E, office = Config.Economy, nearestOffice(src)
+    if E and E.Enabled and fee > 0 and office and office.region and GetResourceState('rsg-economy') == 'started' then
+        local ok, quote = pcall(function()
+            return exports['rsg-economy']:Quote(src, { region = office.region, mode = 'buy', base = fee, qty = 1, category = E.Category or 'sales', market = false })
+        end)
+        if ok and type(quote) == 'table' and tonumber(quote.total) then return round2(quote.total), quote, office end
+    end
+    return fee, nil, office
+end
+
+-- bookkeeping after a successful send: tax into the town treasury, standing in the post office's region
+local function afterSend(src, quote, office)
+    if quote then pcall(function() exports['rsg-economy']:Record(src, quote) end) end
+    local R = Config.Reputation
+    if R and R.Enabled and (R.StandingPerSend or 0) > 0 and office and office.region and GetResourceState('rsg-reputation') == 'started' then
+        pcall(function() exports['rsg-reputation']:AddStanding(src, office.region, R.StandingPerSend, 'telegram-sent', true) end)
+    end
 end
 
 RSGCore.Functions.CreateCallback('rsg-telegram:server:send', function(source, cb, data)
@@ -737,6 +941,10 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:send', function(source, cb
         return cb(false)
     end
 
+    -- anonymous telegrams go to people, not offices
+    local ANON = Config.Anonymous or {}
+    local anonymous = data.anonymous == true and ANON.Enabled and not office or false
+
     -- claim the cooldown slot before yielding on the DB, so parallel requests can't slip through
     sendCooldowns[senderCid] = now
 
@@ -758,53 +966,146 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:send', function(source, cb
         recipients = { { citizenid = target, name = targetName } }
     end
 
-    -- recipients who blocked the sender are skipped without telling anyone
-    local deliverable = {}
+    -- a recipient who blocked the sender gets a hidden copy: it is charged, shown in the Sent tab and "delivered"
+    -- exactly like any other, but never reaches that inbox, so blocking cannot be probed
+    local deliverable, blocked = {}, {}
     for _, r in ipairs(recipients) do
-        if not isBlocked(r.citizenid, senderCid) then deliverable[#deliverable + 1] = r end
-    end
-    if #deliverable == 0 then
-        -- looks sent, but nothing is stored, charged or taken
-        notify(src, locale('sv_sent'), 'success')
-        return cb(true)
+        if isBlocked(r.citizenid, senderCid) then blocked[#blocked + 1] = r else deliverable[#deliverable + 1] = r end
     end
 
-    local fee = Config.SendCost + (att and (AT.Fee or 0) or 0)
-    if fee > 0 and not Player.Functions.RemoveMoney(Config.MoneyType, fee, 'telegram-sent') then
+    local fee = Config.SendCost + (att and (AT.Fee or 0) or 0) + (anonymous and (ANON.Fee or 0) or 0)
+    local charge, quote, postOffice = priceFor(src, fee)
+    if charge > 0 and not Player.Functions.RemoveMoney(Config.MoneyType, charge, 'telegram-sent') then
         sendCooldowns[senderCid] = last
-        notify(src, locale('sv_no_money', ('%.2f'):format(fee)), 'error')
+        notify(src, locale('sv_no_money', ('%.2f'):format(charge)), 'error')
         return cb(false)
     end
 
     local function refundAll()
-        if fee > 0 then Player.Functions.AddMoney(Config.MoneyType, fee, 'telegram-refund') end
+        if charge > 0 then Player.Functions.AddMoney(Config.MoneyType, charge, 'telegram-refund') end
         sendCooldowns[senderCid] = last
     end
 
-    if att and not takeAttachment(src, Player, att) then
+    -- the attachment only leaves the sender when somebody will actually receive it
+    local taken = att and #deliverable > 0
+    if taken and not takeAttachment(src, Player, att) then
         refundAll()
         notify(src, locale('sv_attach_no_item'), 'error')
         return cb(false)
     end
 
     local senderName = fullName(Player.PlayerData.charinfo)
-    local extra = { batch = office and newBatch() or nil, attachment = att and json.encode(att) or nil }
+    local shownName = anonymous and locale('sv_anonymous') or senderName
+    local batch = office and newBatch() or nil
     local stored = 0
     for _, r in ipairs(deliverable) do
-        if storeTelegram(senderCid, senderName, r.citizenid, office and office.label or r.name, subject, message, Config.DeliveryDelay, false, extra) then
+        local to = office and office.label or r.name
+        if storeTelegram(senderCid, shownName, r.citizenid, to, subject, message, deliveryDelay(src, r.citizenid), false,
+            { batch = batch, attachment = att and json.encode(att) or nil, anonymous = anonymous }) then
             stored = stored + 1
         end
     end
+    for _, r in ipairs(blocked) do
+        storeTelegram(senderCid, shownName, r.citizenid, office and office.label or r.name, subject, message, deliveryDelay(src, r.citizenid), true,
+            { batch = batch, anonymous = anonymous, silenced = true, claimed = att ~= nil })
+    end
 
-    if stored == 0 then
-        if att then giveBack(src, Player, att) end
+    if #deliverable > 0 and stored == 0 then
+        if taken then giveBack(src, Player, att) end
         refundAll()
         notify(src, locale('sv_invalid'), 'error')
         return cb(false)
     end
 
+    afterSend(src, quote, postOffice)
     notify(src, locale('sv_sent'), 'success')
     cb(true)
+end)
+
+---------------------------------
+-- notices and broadcasts: one telegram to many characters
+---------------------------------
+-- scope 'online' = everyone connected now (capped at maxN), 'all' = every character (capped at maxN, one SQL statement).
+-- Returns how many characters it reaches. sender: { cid, name }. Nothing is charged here; callers check who may send.
+local function broadcast(sender, subject, message, kind, scope, delay, maxN, excludeCid)
+    delay = math.max(0, math.floor(tonumber(delay) or 0))
+    maxN = math.max(1, math.floor(tonumber(maxN) or 100))
+
+    if scope == 'all' then
+        local reached = MySQL.update.await(
+            [[INSERT INTO rsg_telegrams (citizenid, recipient_name, sender_citizenid, sender_name, subject, message, kind, batch, sent_at)
+              SELECT citizenid, '', ?, ?, ?, ?, ?, ?, NOW() + INTERVAL ? SECOND FROM players LIMIT ?]],
+            { sender.cid, sender.name, subject, message, kind, newBatch(), delay, maxN }) or 0
+        SetTimeout(delay * 1000, function()
+            for _, P in pairs(RSGCore.Functions.GetRSGPlayers()) do
+                TriggerClientEvent('rsg-telegram:client:newTelegram', P.PlayerData.source, sender.name)
+                pushUnread(P.PlayerData.citizenid)
+            end
+        end)
+        return reached
+    end
+
+    local batch, reached = newBatch(), 0
+    for _, P in pairs(RSGCore.Functions.GetRSGPlayers()) do
+        local cid = P.PlayerData and P.PlayerData.citizenid
+        if cid and cid ~= excludeCid and reached < maxN then
+            if storeTelegram(sender.cid, sender.name, cid, fullName(P.PlayerData.charinfo), subject, message, delay, false, { batch = batch, kind = kind }) then
+                reached = reached + 1
+            end
+        end
+    end
+    return reached
+end
+
+local function say(src, text, ntype)
+    if src == 0 then print(('[%s] %s'):format(GetCurrentResourceName(), text)) else notify(src, text, ntype) end
+end
+
+-- "subject | message" -> sanitised subject, message (or nil)
+local function splitText(text)
+    local subj, msg = tostring(text or ''):match('^(.-)%s*|%s*(.+)$')
+    return sanitize(subj, Config.MaxSubject), sanitize(msg, Config.MaxMessage)
+end
+
+-- /telegrambroadcast <online|all> <delay minutes> <subject | message>   (admin / console)
+RSGCore.Commands.Add('telegrambroadcast', locale('cmd_broadcast'), {
+    { name = 'scope', help = 'online | all' }, { name = 'minutes', help = '0 = now' }, { name = 'text', help = 'subject | message' },
+}, false, function(source, args)
+    local scope = (args[1] or ''):lower()
+    local minutes = tonumber(args[2])
+    local subject, message = splitText(table.concat(args, ' ', 3))
+    if (scope ~= 'online' and scope ~= 'all') or not minutes or not subject or not message then
+        return say(source, locale('sv_broadcast_usage'), 'error')
+    end
+    minutes = math.max(0, math.min(10080, minutes))
+    local name = (Config.API and Config.API.SystemSenderName) or 'Telegraph Office'
+    local count = broadcast({ cid = SYSTEM_CID, name = name }, subject, message, 'broadcast', scope, minutes * 60,
+        scope == 'all' and (Config.Broadcast and Config.Broadcast.MaxAll) or 1000)
+    say(source, locale('sv_broadcast_sent', count), 'success')
+end, 'admin')
+
+-- /notice <subject | message>: an official notice from a job (law, ...) to everyone online
+RSGCore.Commands.Add('notice', locale('cmd_notice'), { { name = 'text', help = 'subject | message' } }, false, function(source, args)
+    local N = Config.Notices or {}
+    local Player = RSGCore.Functions.GetPlayer(source)
+    if source == 0 or not Player or not N.Enabled then return end
+    local job = Player.PlayerData.job or {}
+    local allowed = false
+    for _, j in ipairs(N.Jobs or {}) do if j == job.name then allowed = true break end end
+    if not allowed or (N.RequireOnDuty and not job.onduty) then return notify(source, locale('sv_notice_denied'), 'error') end
+
+    local cid = Player.PlayerData.citizenid
+    local wait = (N.Cooldown or 0) - (os.time() - (noticeCooldowns[cid] or 0))
+    if wait > 0 then return notify(source, locale('sv_notice_cooldown', wait), 'error') end
+
+    local subject, message = splitText(table.concat(args, ' '))
+    if not subject or not message then return notify(source, locale('sv_notice_usage'), 'error') end
+
+    noticeCooldowns[cid] = os.time()
+    local office = jobAddresses[job.name]
+    local name = (office and office.label) or job.label or fullName(Player.PlayerData.charinfo)
+    local count = broadcast({ cid = cid, name = name }, subject, message, 'notice', 'online', 0, N.MaxRecipients or 300, cid)
+    notify(source, locale('sv_notice_sent', count), 'success')
 end)
 
 ---------------------------------
@@ -868,10 +1169,14 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:getBlocked', function(sour
     cb(getBlocked(Player.PlayerData.citizenid))
 end)
 
-RSGCore.Functions.CreateCallback('rsg-telegram:server:block', function(source, cb, citizenid)
+-- arg: a citizen id, or { id = telegram id } to block the sender of one of your telegrams without learning who it is
+RSGCore.Functions.CreateCallback('rsg-telegram:server:block', function(source, cb, arg)
     local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player or not validCid(citizenid) or not canUseUI(source) or not throttle(source, 'block', ACTION_THROTTLE) then return cb(false) end
-    local ok, reason = addBlock(Player.PlayerData.citizenid, citizenid)
+    local byTelegram = type(arg) == 'table' and validId(arg.id)
+    if not Player or not (byTelegram or validCid(arg)) or not canUseUI(source) or not throttle(source, 'block', ACTION_THROTTLE) then return cb(false) end
+    local ok, reason
+    if byTelegram then ok, reason = blockFromTelegram(Player.PlayerData.citizenid, arg.id)
+    else ok, reason = addBlock(Player.PlayerData.citizenid, arg) end
     if not ok then
         if reason == 'self' then notify(source, locale('sv_self_block'), 'error')
         elseif reason == 'blocks_full' then notify(source, locale('sv_blocks_full', Config.MaxBlocked or 100), 'error')
@@ -882,10 +1187,12 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:block', function(source, c
     cb(true)
 end)
 
-RSGCore.Functions.CreateCallback('rsg-telegram:server:unblock', function(source, cb, citizenid)
+-- arg: a citizen id, or { id = block row id } for anonymous blocks
+RSGCore.Functions.CreateCallback('rsg-telegram:server:unblock', function(source, cb, arg)
     local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player or not validCid(citizenid) or not canUseUI(source) or not throttle(source, 'block', ACTION_THROTTLE) then return cb(false) end
-    if removeBlock(Player.PlayerData.citizenid, citizenid) then
+    local target = type(arg) == 'table' and validId(arg.id) and arg.id or (validCid(arg) and arg or nil)
+    if not Player or not target or not canUseUI(source) or not throttle(source, 'block', ACTION_THROTTLE) then return cb(false) end
+    if removeBlock(Player.PlayerData.citizenid, target) then
         notify(source, locale('sv_unblocked'), 'inform')
         return cb(true)
     end
@@ -908,7 +1215,9 @@ RegisterNetEvent('rsg-telegram:server:markRead', function(id)
         sender = row and row.sender_citizenid
     end
 
-    if markRead(cid, id) > 0 and sender and sender ~= SYSTEM_CID then
+    local changed = markRead(cid, id)
+    if changed > 0 then pushUnread(cid) end
+    if changed > 0 and sender and sender ~= SYSTEM_CID then
         local Sender = RSGCore.Functions.GetPlayerByCitizenId(sender)
         if Sender then notify(Sender.PlayerData.source, locale('sv_receipt_read', fullName(Player.PlayerData.charinfo))) end
     end
@@ -919,6 +1228,7 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:delete', function(source, 
     if not Player or not validId(id) or not canUseUI(source) or not throttle(source, 'delete', ACTION_THROTTLE) then return cb(false) end
     local ok, reason = deleteTelegram(Player.PlayerData.citizenid, id)
     if ok then
+        pushUnread(Player.PlayerData.citizenid)
         notify(source, locale('sv_deleted'), 'inform')
         return cb(true)
     end
@@ -930,7 +1240,10 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:markAllRead', function(sou
     local Player = RSGCore.Functions.GetPlayer(source)
     if not Player or not canUseUI(source) or not throttle(source, 'bulk', 1500) then return cb(false) end
     local count = markRead(Player.PlayerData.citizenid)
-    if count > 0 then notify(source, locale('sv_marked_all', count), 'success') end
+    if count > 0 then
+        pushUnread(Player.PlayerData.citizenid)
+        notify(source, locale('sv_marked_all', count), 'success')
+    end
     cb(true)
 end)
 
@@ -938,8 +1251,36 @@ RSGCore.Functions.CreateCallback('rsg-telegram:server:deleteRead', function(sour
     local Player = RSGCore.Functions.GetPlayer(source)
     if not Player or not canUseUI(source) or not throttle(source, 'bulk', 1500) then return cb(false) end
     local count = deleteRead(Player.PlayerData.citizenid)
-    if count > 0 then notify(source, locale('sv_deleted_read', count), 'inform') end
+    if count > 0 then
+        pushUnread(Player.PlayerData.citizenid)
+        notify(source, locale('sv_deleted_read', count), 'inform')
+    end
     cb(true)
+end)
+
+---------------------------------
+-- settings: listed in the directory search or not
+---------------------------------
+RSGCore.Functions.CreateCallback('rsg-telegram:server:getSettings', function(source, cb)
+    local Player = RSGCore.Functions.GetPlayer(source)
+    if not Player or not canUseUI(source) then return cb(false) end
+    cb({ unlisted = unlisted[Player.PlayerData.citizenid] == true })
+end)
+
+RSGCore.Functions.CreateCallback('rsg-telegram:server:toggleListed', function(source, cb)
+    local Player = RSGCore.Functions.GetPlayer(source)
+    if not Player or not canUseUI(source) or not throttle(source, 'settings', ACTION_THROTTLE) then return cb(false) end
+    local cid = Player.PlayerData.citizenid
+    if unlisted[cid] then
+        unlisted[cid] = nil
+        MySQL.update('DELETE FROM rsg_telegram_settings WHERE citizenid = ?', { cid })
+        notify(source, locale('sv_listed'), 'inform')
+    else
+        unlisted[cid] = true
+        MySQL.update('INSERT INTO rsg_telegram_settings (citizenid, unlisted) VALUES (?, 1) ON DUPLICATE KEY UPDATE unlisted = 1', { cid })
+        notify(source, locale('sv_unlisted'), 'inform')
+    end
+    cb({ unlisted = unlisted[cid] == true })
 end)
 
 -- the client tells us when its UI closed, so a remote-open grant does not outlive the session
@@ -954,10 +1295,18 @@ AddEventHandler('RSGCore:Server:PlayerLoaded', function(Player)
     if not Player or not Player.PlayerData then return end
     local src, cid = Player.PlayerData.source, Player.PlayerData.citizenid
     SetTimeout(5000, function()
+        if not GetPlayerName(src) then return end
         local count = getUnreadCount(cid)
-        if count > 0 and GetPlayerName(src) then
-            notify(src, locale('sv_unread', count), 'inform')
-        end
+        TriggerClientEvent('rsg-telegram:client:unread', src, count)
+        if count > 0 then notify(src, locale('sv_unread', count), 'inform') end
+    end)
+end)
+
+-- after a resource restart, bring the badge of everyone already online up to date
+AddEventHandler('onResourceStart', function(res)
+    if res ~= GetCurrentResourceName() then return end
+    SetTimeout(4000, function()
+        for _, P in pairs(RSGCore.Functions.GetRSGPlayers()) do pushUnread(P.PlayerData.citizenid) end
     end)
 end)
 

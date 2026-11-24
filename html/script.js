@@ -6,11 +6,16 @@ const state = {
     cost: 0, maxSubject: 50, maxMessage: 1000, minSearch: 2, busy: false,
     tab: 'inbox', view: 'inbox', readMode: 'inbox', offices: [], attach: { enabled: false }, receipts: true,
     attachables: null, attachSel: {}, modalAction: null,
+    inboxQuery: '', inboxMore: false, pageSize: 25, unreadTotal: null,
+    anon: { enabled: false, fee: 0 }, anonymous: false, showIds: true, directory: false, unlisted: false, appOpen: false,
 };
 const DRAFT_KEY = 'rsg-telegram:draft';
-const timers = { recipient: null, contact: null };
+let draftOwner = null; // citizen id the stored draft belongs to (localStorage is shared by every character on this PC)
+const timers = { recipient: null, contact: null, inbox: null };
 let L = {};
 const SYSTEM_SENDER = 'SYSTEM'; // sender id used for telegrams sent by scripts through the server API
+const ANON_SENDER = 'ANON';     // what the server sends instead of an anonymous sender's citizen id
+function idTag(cid) { return state.showIds ? (cid || '') : ''; }
 
 /* ---------- locales ---------- */
 function t(key, ...args) {
@@ -85,6 +90,7 @@ async function setTab(tab) {
     $('tab-inbox').classList.toggle('active', tab === 'inbox');
     $('tab-sent').classList.toggle('active', tab === 'sent');
     $('bulk-bar').classList.toggle('hidden', tab !== 'inbox');
+    $('search-row').classList.toggle('hidden', tab !== 'inbox');
     renderList();
     if (tab === 'sent') await refreshSent(); else await refreshInbox();
 }
@@ -92,10 +98,11 @@ async function setTab(tab) {
 /* ---------- inbox ---------- */
 function renderInbox() {
     const list = $('inbox-list');
-    const unread = state.inbox.filter(m => !m.is_read).length;
+    const loadedUnread = state.inbox.filter(m => !m.is_read).length;
+    const unread = state.inboxMore && state.unreadTotal != null ? Math.max(loadedUnread, state.unreadTotal) : loadedUnread;
     $('unread-count').textContent = unread ? t('ui_new_count', unread) : '';
     if (!state.inbox.length) {
-        list.innerHTML = `<div class="empty">${esc(t('ui_no_telegrams'))}</div>`;
+        list.innerHTML = `<div class="empty">${esc(t(state.inboxQuery ? 'ui_no_results' : 'ui_no_telegrams'))}</div>`;
         return;
     }
     list.innerHTML = state.inbox.map(m => `
@@ -106,11 +113,14 @@ function renderInbox() {
                 <div class="row-sub">${esc(t('ui_from_line', m.sender_name))} &middot; ${fmtDate(m.sent_at)}</div>
             </div>
             <div class="row-pills">
+                ${m.kind ? `<span class="pill notice">${esc(t(m.kind === 'notice' ? 'ui_kind_notice' : 'ui_kind_broadcast'))}</span>` : ''}
                 ${m.is_read ? '' : `<span class="pill">${esc(t('ui_new'))}</span>`}
                 ${m.attachment ? `<span class="pill ok">${esc(t('ui_attachment'))}</span>` : ''}
             </div>
-        </div>`).join('');
+        </div>`).join('') + (state.inboxMore ? `<div class="load-more"><button class="wood-btn muted mini-btn" id="btn-more">${esc(t('ui_load_more'))}</button></div>` : '');
     list.querySelectorAll('.row').forEach(r => r.addEventListener('click', () => openTelegram(Number(r.dataset.id))));
+    const more = $('btn-more');
+    if (more) more.addEventListener('click', async () => { more.disabled = true; await refreshInbox(true); });
 }
 
 /* ---------- sent ---------- */
@@ -155,10 +165,14 @@ async function refreshSent() {
     if (state.tab === 'sent') renderSent();
 }
 
-async function refreshInbox() {
-    const data = await post('refresh');
-    if (data === false) return; // throttled, keep what is shown
-    state.inbox = Array.isArray(data) ? data : [];
+// append = load the next page; otherwise (re)load the first page for the current search
+async function refreshInbox(append = false) {
+    const data = await post('refresh', { offset: append ? state.inbox.length : 0, query: state.inboxQuery });
+    if (data === false) { if (append) renderInbox(); return; } // throttled, keep what is shown
+    const rows = Array.isArray(data) ? data : [];
+    const known = new Set(state.inbox.map(m => m.id));
+    state.inbox = append ? state.inbox.concat(rows.filter(m => !known.has(m.id))) : rows;
+    state.inboxMore = rows.length >= state.pageSize;
     if (state.tab === 'inbox') renderInbox();
 }
 
@@ -214,10 +228,11 @@ function openTelegram(id) {
     $('read-body').textContent = m.message;
     $('read-body').parentElement.scrollTop = 0;
     const fromSystem = m.sender_citizenid === SYSTEM_SENDER;
-    $('btn-reply').classList.toggle('hidden', fromSystem);
-    $('btn-save-sender').classList.toggle('hidden', fromSystem);
+    const anon = m.sender_citizenid === ANON_SENDER;
+    $('btn-reply').classList.toggle('hidden', fromSystem || anon);
+    $('btn-save-sender').classList.toggle('hidden', fromSystem || anon);
     $('btn-block').classList.toggle('hidden', fromSystem);
-    if (!m.is_read) { m.is_read = 1; post('read', { id }); }
+    if (!m.is_read) { m.is_read = 1; if (state.unreadTotal) state.unreadTotal -= 1; post('read', { id }); }
     showView('read');
 }
 
@@ -225,6 +240,7 @@ function openTelegram(id) {
 function resetCompose() {
     state.recipient = null;
     resetAttach();
+    setAnonymous(false);
     $('in-recipient').value = '';
     $('in-subject').value = '';
     $('in-message').value = '';
@@ -235,12 +251,13 @@ function resetCompose() {
 
 function renderChosen() {
     const c = $('chosen');
-    if (!state.recipient) { c.classList.add('hidden'); $('in-recipient').classList.remove('hidden'); return; }
-    c.innerHTML = `<span>${esc(state.recipient.name)} <small>${esc(state.recipient.job ? t('ui_office_tag') : state.recipient.citizenid)}</small></span><button id="clear-recipient">&#10005;</button>`;
+    if (!state.recipient) { c.classList.add('hidden'); $('in-recipient').classList.remove('hidden'); syncAnonymous(); return; }
+    c.innerHTML = `<span>${esc(state.recipient.name)} <small>${esc(state.recipient.job ? t('ui_office_tag') : idTag(state.recipient.citizenid))}</small></span><button id="clear-recipient">&#10005;</button>`;
     c.classList.remove('hidden');
     $('in-recipient').classList.add('hidden');
     $('clear-recipient').onclick = () => { state.recipient = null; $('in-recipient').value = ''; renderChosen(); saveDraftSoon(); $('in-recipient').focus(); };
     syncAttachPanel();
+    syncAnonymous();
 }
 
 function updateCounter() {
@@ -272,11 +289,11 @@ function renderRecipientResults(query, remote) {
     }
     if (book.length) {
         html += `<div class="result-group">${esc(t('ui_address_book'))}</div>`;
-        book.forEach(c => { items.push(c); html += `<div class="result" data-i="${items.length - 1}"><span><span class="book">&#9733;</span>${esc(contactLabel(c))}</span><small>${esc(c.citizenid)}</small></div>`; });
+        book.forEach(c => { items.push(c); html += `<div class="result" data-i="${items.length - 1}"><span><span class="book">&#9733;</span>${esc(contactLabel(c))}</span><small>${esc(idTag(c.citizenid))}</small></div>`; });
     }
     if (others.length) {
         html += `<div class="result-group">${esc(t('ui_directory'))}</div>`;
-        others.forEach(r => { items.push(r); html += `<div class="result" data-i="${items.length - 1}"><span>${esc(r.name)}</span><small>${esc(r.citizenid)}</small></div>`; });
+        others.forEach(r => { items.push(r); html += `<div class="result" data-i="${items.length - 1}"><span>${esc(r.name)}</span><small>${esc(idTag(r.citizenid))}</small></div>`; });
     }
     if (!items.length) {
         if (!q) { box.classList.add('hidden'); return; }
@@ -320,6 +337,21 @@ function resetAttach() {
     updateAttachSummary();
 }
 
+// the anonymous option is for telegrams to a person (not to an office)
+function syncAnonymous() {
+    const ok = state.anon.enabled && state.recipient && !state.recipient.job;
+    $('anon-row').classList.toggle('hidden', !ok);
+    if (!ok && state.anonymous) setAnonymous(false);
+}
+
+function setAnonymous(on) {
+    state.anonymous = !!on;
+    $('btn-anon').classList.toggle('active', state.anonymous);
+    updateFee();
+}
+
+$('btn-anon').addEventListener('click', () => setAnonymous(!state.anonymous));
+
 function syncAttachPanel() {
     const ok = state.attach.enabled && state.recipient && !state.recipient.job;
     $('attach-panel').classList.toggle('hidden', !ok);
@@ -361,7 +393,7 @@ function updateAttachSummary() {
 }
 
 function updateFee() {
-    const total = state.cost + (buildAttachment() ? (state.attach.fee || 0) : 0);
+    const total = state.cost + (buildAttachment() ? (state.attach.fee || 0) : 0) + (state.anonymous ? (state.anon.fee || 0) : 0);
     $('send-cost').textContent = total > 0 ? money(total) : t('ui_free');
 }
 
@@ -420,9 +452,10 @@ $('in-cash').addEventListener('input', (e) => {
 let draftTimer = null;
 function saveDraft() {
     const subject = $('in-subject').value, message = $('in-message').value;
+    if (!draftOwner) return;
     try {
         if (!subject.trim() && !message.trim()) { localStorage.removeItem(DRAFT_KEY); return; }
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ subject, message, recipient: state.recipient || null }));
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ owner: draftOwner, subject, message, recipient: state.recipient || null }));
     } catch (e) {}
 }
 function saveDraftSoon() { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 400); }
@@ -430,7 +463,7 @@ function clearDraft() { clearTimeout(draftTimer); try { localStorage.removeItem(
 function loadDraft() {
     let d = null;
     try { d = JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch (e) {}
-    if (!d || typeof d !== 'object') return;
+    if (!d || typeof d !== 'object' || !draftOwner || d.owner !== draftOwner) return; // never show another character's draft
     $('in-subject').value = String(d.subject || '').slice(0, state.maxSubject);
     $('in-message').value = String(d.message || '').slice(0, state.maxMessage);
     const r = d.recipient;
@@ -461,7 +494,7 @@ function renderContacts() {
             <div class="badge-icon">&#9733;</div>
             <div class="row-main">
                 <div class="row-title">${esc(c.nickname || c.name)}</div>
-                <div class="row-sub">${c.nickname ? esc(c.name) + ' &middot; ' : ''}${esc(c.citizenid)}</div>
+                <div class="row-sub">${c.nickname ? esc(c.name) + (state.showIds ? ' &middot; ' : '') : ''}${esc(idTag(c.citizenid))}</div>
             </div>
             <div class="row-actions">
                 <button class="wood-btn mini-btn" data-act="write">${esc(t('ui_write_short'))}</button>
@@ -497,7 +530,7 @@ function setPendingContact(r) {
         $('in-contact-search').classList.remove('hidden');
         return;
     }
-    $('contact-chosen').innerHTML = `<span>${esc(r.name)} <small>${esc(r.citizenid)}</small></span><button id="clear-contact">&#10005;</button>`;
+    $('contact-chosen').innerHTML = `<span>${esc(r.name)} <small>${esc(idTag(r.citizenid))}</small></span><button id="clear-contact">&#10005;</button>`;
     $('clear-contact').onclick = () => { setPendingContact(null); $('in-contact-search').value = ''; };
     $('in-nickname').value = '';
     $('add-contact').classList.remove('hidden');
@@ -515,7 +548,7 @@ $('in-contact-search').addEventListener('input', (e) => {
         if (results === false || $('in-contact-search').value.trim() !== q) return;
         const list = Array.isArray(results) ? results : [];
         box.innerHTML = list.length
-            ? list.map((r, i) => `<div class="result" data-i="${i}"><span>${esc(r.name)}</span><small>${esc(r.citizenid)}</small></div>`).join('')
+            ? list.map((r, i) => `<div class="result" data-i="${i}"><span>${esc(r.name)}</span><small>${esc(idTag(r.citizenid))}</small></div>`).join('')
             : `<div class="result"><small>${esc(t('ui_no_results'))}</small></div>`;
         box.querySelectorAll('.result[data-i]').forEach(el => el.addEventListener('click', () => setPendingContact(list[Number(el.dataset.i)])));
         box.classList.remove('hidden');
@@ -536,10 +569,27 @@ $('btn-add-contact').addEventListener('click', async () => {
     }
 });
 
+function renderListed() {
+    const btn = $('btn-listed');
+    btn.classList.toggle('hidden', !state.directory);
+    btn.textContent = t(state.unlisted ? 'ui_dir_unlisted' : 'ui_dir_listed');
+}
+
+$('btn-listed').addEventListener('click', async () => {
+    const btn = $('btn-listed');
+    btn.disabled = true;
+    const res = await post('toggleListed');
+    btn.disabled = false;
+    if (res && typeof res === 'object') { state.unlisted = !!res.unlisted; renderListed(); }
+});
+
 $('btn-contacts').addEventListener('click', async () => {
     setPendingContact(null);
     $('in-contact-search').value = '';
     showView('contacts');
+    renderListed();
+    const settings = state.directory ? await post('getSettings') : null;
+    if (settings && typeof settings === 'object') { state.unlisted = !!settings.unlisted; renderListed(); }
     await loadContacts();
 });
 
@@ -568,7 +618,7 @@ $('btn-send').addEventListener('click', async () => {
     btn.disabled = true;
     btn.textContent = t('ui_sending');
     const ok = await post('send', {
-        citizenid: state.recipient.citizenid, job: state.recipient.job, subject, message, attachment: buildAttachment(),
+        citizenid: state.recipient.citizenid, job: state.recipient.job, subject, message, attachment: buildAttachment(), anonymous: state.anonymous,
     });
     state.busy = false;
     btn.disabled = false;
@@ -587,6 +637,10 @@ $('btn-back').addEventListener('click', () => {
     if (state.view === 'blocked') return showView('contacts');
     showView('inbox');
     renderList();
+});
+$('in-inbox-search').addEventListener('input', (e) => {
+    clearTimeout(timers.inbox);
+    timers.inbox = setTimeout(() => { state.inboxQuery = e.target.value.trim(); refreshInbox(false); }, 350);
 });
 $('tab-inbox').addEventListener('click', () => { if (state.tab !== 'inbox') setTab('inbox'); });
 $('tab-sent').addEventListener('click', () => { if (state.tab !== 'sent') setTab('sent'); });
@@ -638,7 +692,7 @@ function renderBlocked() {
             <div class="badge-icon">&#10006;</div>
             <div class="row-main">
                 <div class="row-title">${esc(b.name || b.citizenid)}</div>
-                <div class="row-sub">${esc(b.citizenid)}</div>
+                <div class="row-sub">${esc(idTag(b.citizenid))}</div>
             </div>
             <div class="row-actions"><button class="wood-btn muted mini-btn">${esc(t('ui_unblock'))}</button></div>
         </div>`).join('');
@@ -647,9 +701,9 @@ function renderBlocked() {
         row.querySelector('button').addEventListener('click', async (e) => {
             const btn = e.currentTarget;
             btn.disabled = true;
-            const ok = await post('unblock', { citizenid: b.citizenid });
+            const ok = await post('unblock', b.citizenid ? { citizenid: b.citizenid } : { id: b.id });
             if (!ok) { btn.disabled = false; return; }
-            state.blocked = state.blocked.filter(x => x.citizenid !== b.citizenid);
+            state.blocked = state.blocked.filter(x => x.id !== b.id);
             renderBlocked();
         });
     });
@@ -668,7 +722,8 @@ $('btn-block').addEventListener('click', () => {
     const m = state.current;
     if (!m || state.readMode !== 'inbox' || m.sender_citizenid === SYSTEM_SENDER) return;
     askConfirm('ui_confirm_block_title', 'ui_confirm_block_text', 'ui_block', async () => {
-        const ok = await post('block', { citizenid: m.sender_citizenid });
+        // an anonymous sender is blocked through the telegram, the client never learns who it is
+        const ok = await post('block', m.sender_citizenid === ANON_SENDER ? { id: m.id } : { citizenid: m.sender_citizenid });
         if (ok) loadBlocked();
     }, m.sender_name);
 });
@@ -717,11 +772,19 @@ document.addEventListener('keydown', (e) => {
     post('close');
 });
 
+/* ---------- unread badge (outside the panel, hidden while the panel is open) ---------- */
+function updateBadge() {
+    const n = state.unreadTotal || 0;
+    $('mail-count').textContent = n;
+    $('mail-badge').classList.toggle('hidden', n < 1 || state.appOpen);
+}
+
 /* ---------- lua messages ---------- */
 window.addEventListener('message', (e) => {
     const d = e.data;
     if (d.action === 'open') {
         if (d.locales) { L = d.locales; applyLocales(); applyTextSize(); }
+        draftOwner = typeof d.owner === 'string' ? d.owner : null;
         state.inbox = Array.isArray(d.inbox) ? d.inbox : [];
         state.cost = d.cost || 0;
         state.maxSubject = d.maxSubject || 50;
@@ -730,12 +793,23 @@ window.addEventListener('message', (e) => {
         state.offices = Array.isArray(d.offices) ? d.offices : [];
         state.attach = d.attachments && d.attachments.enabled ? d.attachments : { enabled: false };
         state.receipts = d.receipts !== false;
+        state.anon = d.anonymous && d.anonymous.enabled ? d.anonymous : { enabled: false, fee: 0 };
+        state.pageSize = d.pageSize || 25;
+        state.showIds = d.showIds !== false;
+        state.directory = d.directory === true;
+        state.inboxQuery = '';
+        $('in-inbox-search').value = '';
+        state.inboxMore = state.inbox.length >= state.pageSize;
+        state.appOpen = true;
+        updateBadge();
         state.tab = 'inbox';
         state.sent = [];
         state.current = null;
         $('tab-inbox').classList.add('active');
         $('tab-sent').classList.remove('active');
         $('bulk-bar').classList.remove('hidden');
+        $('search-row').classList.remove('hidden');
+        setAnonymous(false);
         resetAttach();
         syncAttachPanel();
         $('office-name').textContent = d.office || t('ui_post_office');
@@ -747,7 +821,16 @@ window.addEventListener('message', (e) => {
         renderInbox();
         $('app').classList.remove('hidden');
         loadContacts();
+    } else if (d.action === 'badge') {
+        state.unreadTotal = Number(d.count) || 0;
+        const el = $('mail-badge');
+        el.classList.remove('top-right', 'top-left', 'bottom-right', 'bottom-left');
+        el.classList.add(['top-left', 'bottom-right', 'bottom-left'].includes(d.corner) ? d.corner : 'top-right');
+        updateBadge();
+        if (state.appOpen && state.tab === 'inbox' && state.view === 'inbox') renderInbox();
     } else if (d.action === 'close') {
+        state.appOpen = false;
+        updateBadge();
         saveDraft();
         $('app').classList.add('hidden');
         state.modalAction = null;

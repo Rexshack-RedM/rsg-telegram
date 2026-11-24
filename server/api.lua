@@ -110,7 +110,9 @@ end)
 exports('MarkRead', function(citizen, id)
     local cid = toCid(citizen)
     if not enabled() or not cid or (id ~= nil and not I.validId(id)) then return 0 end
-    return I.markRead(cid, id)
+    local n = I.markRead(cid, id)
+    if n > 0 then I.pushUnread(cid) end
+    return n
 end)
 
 -- DeleteTelegram(citizen, id) -> ok, reason
@@ -118,14 +120,18 @@ end)
 exports('DeleteTelegram', function(citizen, id)
     local cid = toCid(citizen)
     if not enabled() or not cid or not I.validId(id) then return false end
-    return I.deleteTelegram(cid, id)
+    local ok, reason = I.deleteTelegram(cid, id)
+    if ok then I.pushUnread(cid) end
+    return ok, reason
 end)
 
 -- DeleteReadTelegrams(citizen) -> number destroyed (read telegrams with nothing left to collect)
 exports('DeleteReadTelegrams', function(citizen)
     local cid = toCid(citizen)
     if not enabled() or not cid then return 0 end
-    return I.deleteRead(cid)
+    local n = I.deleteRead(cid)
+    if n > 0 then I.pushUnread(cid) end
+    return n
 end)
 
 ---------------------------------

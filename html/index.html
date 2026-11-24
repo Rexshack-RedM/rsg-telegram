@@ -40,6 +40,9 @@
                 <button class="wood-btn muted mini-btn" id="btn-mark-all" data-i18n="ui_mark_all_read">Mark all read</button>
                 <button class="wood-btn muted mini-btn" id="btn-destroy-read" data-i18n="ui_destroy_read">Destroy read</button>
             </div>
+            <div class="search-row" id="search-row">
+                <input type="text" id="in-inbox-search" maxlength="40" data-i18n-ph="ui_search_inbox_ph" placeholder="Search telegrams..." autocomplete="off">
+            </div>
             <div class="list" id="inbox-list"></div>
         </div>
 
@@ -91,7 +94,10 @@
             </div>
             <div class="toolbar contacts-head">
                 <span class="label"><span data-i18n="ui_contacts">Contacts</span> <span id="contact-count"></span></span>
-                <button class="wood-btn muted mini-btn" id="btn-blocked" data-i18n="ui_blocked">Blocked</button>
+                <span class="toolbar-btns">
+                    <button class="wood-btn muted mini-btn hidden" id="btn-listed"></button>
+                    <button class="wood-btn muted mini-btn" id="btn-blocked" data-i18n="ui_blocked">Blocked</button>
+                </span>
             </div>
             <div class="list" id="contact-list"></div>
         </div>
@@ -131,6 +137,10 @@
                 </div>
             </div>
 
+            <div class="anon-row hidden" id="anon-row">
+                <button class="tab" id="btn-anon" data-i18n="ui_anonymous">Send anonymously</button>
+            </div>
+
             <div class="cost"><span data-i18n="ui_fee">Fee:</span> <b id="send-cost"></b></div>
             <div class="actions">
                 <button class="wood-btn" id="btn-send" data-i18n="ui_send">Send Telegram</button>
@@ -153,6 +163,7 @@
         </div>
     </div>
 </div>
+<div class="mail-badge hidden top-right" id="mail-badge"><span class="mail-ico">&#9993;</span><span id="mail-count"></span></div>
 <div id="toasts"></div>
 <script src="script.js"></script>
 </body>

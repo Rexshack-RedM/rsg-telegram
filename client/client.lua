@@ -6,6 +6,7 @@ local openPrompt
 local isOpen, isOpening = false, false  -- isOpen also means "the UI has NUI focus"
 local openOffice                        -- office the UI was opened at
 local sentLocales = false
+local unreadCount = 0                   -- unread telegrams, pushed by the server (drives the on-screen badge)
 local CLOSE_RANGE = Config.PromptDistance + 2.0 -- the server rejects actions beyond PromptDistance + 3.0
 
 ---------------------------------
@@ -93,6 +94,13 @@ local function jobOffices()
     return list
 end
 
+-- extra options the compose dialog needs
+local function anonymousSummary()
+    local a = Config.Anonymous
+    if not a or not a.Enabled then return { enabled = false } end
+    return { enabled = true, fee = a.Fee }
+end
+
 local function attachmentSummary()
     local at = Config.Attachments
     if not at or not at.Enabled then return { enabled = false } end
@@ -116,9 +124,14 @@ local function openTelegrams(office)
         offices = jobOffices(),
         attachments = attachmentSummary(),
         receipts = Config.Receipts and Config.Receipts.Enabled ~= false,
+        anonymous = anonymousSummary(),
+        pageSize = Config.InboxPageSize or 25,
+        showIds = Config.ShowCitizenIds ~= false,
+        directory = Config.DirectorySearch == true,
         maxSubject = Config.MaxSubject,
         maxMessage = Config.MaxMessage,
         minSearch = Config.SearchMinChars,
+        owner = (RSGCore.Functions.GetPlayerData() or {}).citizenid, -- drafts are stored per character
         locales = not sentLocales and locale() or nil,
     })
     sentLocales = true
@@ -144,21 +157,32 @@ RegisterNUICallback('read', function(data, cb)
     cb('ok')
 end)
 
-nuiCallback('refresh',       'rsg-telegram:server:getInbox')
+nuiCallback('refresh',       'rsg-telegram:server:getInbox',         function(d)
+    return { offset = math.tointeger(tonumber(d.offset)) or 0, query = type(d.query) == 'string' and d.query or nil }
+end)
 nuiCallback('getSent',       'rsg-telegram:server:getSent')
 nuiCallback('markAllRead',   'rsg-telegram:server:markAllRead')
 nuiCallback('deleteRead',    'rsg-telegram:server:deleteRead')
 nuiCallback('collect',       'rsg-telegram:server:collect',          function(d) return math.tointeger(tonumber(d.id)) end)
 nuiCallback('getBlocked',    'rsg-telegram:server:getBlocked')
-nuiCallback('block',         'rsg-telegram:server:block',            function(d) return d.citizenid end)
-nuiCallback('unblock',       'rsg-telegram:server:unblock',          function(d) return d.citizenid end)
+-- anonymous senders are blocked / unblocked by telegram or block id, so the client never needs their citizen id
+nuiCallback('block',         'rsg-telegram:server:block',            function(d)
+    if d.id then return { id = math.tointeger(tonumber(d.id)) } end
+    return d.citizenid
+end)
+nuiCallback('unblock',       'rsg-telegram:server:unblock',          function(d)
+    if d.id then return { id = math.tointeger(tonumber(d.id)) } end
+    return d.citizenid
+end)
+nuiCallback('getSettings',   'rsg-telegram:server:getSettings')
+nuiCallback('toggleListed',  'rsg-telegram:server:toggleListed')
 nuiCallback('getAttachables','rsg-telegram:server:getAttachables')
 nuiCallback('getContacts',   'rsg-telegram:server:getContacts')
 nuiCallback('search',        'rsg-telegram:server:searchRecipients', function(d) return d.query end)
 nuiCallback('removeContact', 'rsg-telegram:server:removeContact',    function(d) return d.citizenid end)
 nuiCallback('delete',        'rsg-telegram:server:delete',           function(d) return math.tointeger(tonumber(d.id)) end)
 nuiCallback('send',          'rsg-telegram:server:send',             function(d)
-    return { citizenid = d.citizenid, job = d.job, subject = d.subject, message = d.message, attachment = d.attachment }
+    return { citizenid = d.citizenid, job = d.job, subject = d.subject, message = d.message, attachment = d.attachment, anonymous = d.anonymous == true }
 end)
 nuiCallback('addContact',    'rsg-telegram:server:addContact',       function(d)
     return { citizenid = d.citizenid, nickname = d.nickname }
@@ -216,6 +240,33 @@ RegisterNetEvent('rsg-telegram:client:open', function(label, coords, radius)
 end)
 
 ---------------------------------
+-- opened by a mailbox prop (client/mailbox.lua); the server still checks the player stands at it
+---------------------------------
+AddEventHandler('rsg-telegram:client:openAt', function(label, coords, radius)
+    -- not a net event, so only scripts on this client can trigger it; the server decides whether the player may use the UI
+    openTelegrams({ name = label, coords = coords, range = radius })
+end)
+
+---------------------------------
+-- unread badge
+---------------------------------
+local function updateBadge()
+    local b = Config.UnreadBadge
+    if not b or not b.Enabled then return end
+    SendNUIMessage({ action = 'badge', count = unreadCount, corner = b.Corner or 'top-right' })
+end
+
+RegisterNetEvent('rsg-telegram:client:unread', function(count)
+    unreadCount = math.max(0, math.floor(tonumber(count) or 0))
+    updateBadge()
+end)
+
+RegisterNetEvent('RSGCore:Client:OnPlayerUnload', function()
+    unreadCount = 0
+    updateBadge()
+end)
+
+---------------------------------
 -- incoming telegram
 ---------------------------------
 RegisterNetEvent('rsg-telegram:client:newTelegram', function(senderName)
@@ -234,6 +285,7 @@ end)
 ---------------------------------
 exports('IsOpen', function() return isOpen end)
 exports('Close', function() if isOpen then closeTelegrams() end end)
+exports('GetUnreadCount', function() return unreadCount end)
 
 ---------------------------------
 -- cleanup

@@ -19,12 +19,14 @@ Technical reference for server owners and developers. For a short overview see [
 ## Overview and file layout
 | File | Purpose |
 |---|---|
-| `fxmanifest.lua` | Resource manifest. Dependencies: `rsg-core`, `rsg-inventory`, `oxmysql` |
+| `fxmanifest.lua` | Resource manifest. Dependencies: `rsg-core`, `rsg-inventory`, `rsg-target`, `rsg-gizmo`, `oxmysql` |
 | `shared/config.lua` | All settings (loaded on client and server) |
 | `server/server.lua` | Schema setup, purge job, data layer (`TelegramInternal`), UI callbacks, attachments, job offices, access control |
+| `server/mailbox.lua` | Admin-placed mailboxes: table, callbacks, `/addmailbox` |
 | `server/api.lua` | Public server exports, built on the same data layer as the UI |
 | `server/versionchecker.lua` | Checks the published version on start |
-| `client/client.lua` | Prompts, blips, NUI focus + push-to-talk whitelist, NUI callbacks, remote-open event |
+| `client/client.lua` | Prompts, blips, NUI focus + push-to-talk whitelist, NUI callbacks, remote-open event, unread badge |
+| `client/mailbox.lua` | Mailbox props (stream in/out), rsg-target options, rsg-gizmo placement |
 | `html/` | NUI: `index.html`, `style.css` (clipboard / old paper theme), `script.js` |
 | `locales/*.json` | `en`, `de`, `el`, `es`, `fr`, `ja`, `nl`, `pl`, `pt-br`, `ro`, `ru` (identical keys) |
 | `installation/rsg-telegram.sql` | Manual schema, identical to the auto-created tables |
@@ -56,7 +58,19 @@ Config.JobAddresses = {
 | `SendCost` | `0.50` | Fee per telegram (0 = free) |
 | `MoneyType` | `'cash'` | Money type charged |
 | `MaxSubject` / `MaxMessage` | `50` / `1000` | Character limits |
-| `MaxInbox` | `50` | Telegrams shown in the inbox |
+| `MaxInbox` | `50` | Most telegrams the API returns per call |
+| `InboxPageSize` | `25` | Telegrams the inbox loads at a time ("Load more" fetches the next page); the inbox search box searches subject, sender and text |
+| `ShowCitizenIds` | `true` | Show citizen IDs next to names in the UI (`false` = names only) |
+| `PurgeDeletedCharacters` / `PurgeDeletedAfterDays` | `true` / `7` | Remove telegrams, contacts, blocks and settings of characters that no longer exist in `players` |
+| `UnreadBadge` | `{ Enabled = true, Corner = 'top-right' }` | On-screen envelope with the unread count (`top-left`, `bottom-right`, `bottom-left` also work) |
+| `DeliveryDistance` | `{ Enabled = false, SecondsPerKm = 20, Max = 180 }` | Adds delivery time by distance between sender and (online) recipient |
+| `Anonymous` | `{ Enabled = true, Fee = 2.00 }` | Anonymous telegrams: recipient sees "Anonymous", can block but not reply; the sender stays in the database |
+| `Notices` | `{ Enabled, Jobs, RequireOnDuty, Cooldown = 600, MaxRecipients = 300 }` | `/notice`: an official notice from these jobs to everyone online |
+| `Broadcast` | `{ MaxAll = 5000 }` | Most characters `/telegrambroadcast ... all` reaches |
+| `Mailbox` | `{ Enabled, Model = 'p_mailbox01x', Permission = 'admin', Max = 100, Distance, SpawnDistance, PlaceDistance, Blip }` | Admin-placed mailbox props |
+| `Economy` | `{ Enabled = false, Category = 'sales' }` | Fees go through `rsg-economy` `Quote` / `Record` using the post office `region` |
+| `Reputation` | `{ Enabled = false, StandingPerSend = 1 }` | Standing gained in the post office's region per telegram (`rsg-reputation`) |
+| `PostOffices[].region` | per office | `rsg-economy` / `rsg-reputation` region id of the post office |
 | `SendCooldown` | `30` | Seconds between sends per character |
 | `DeliveryDelay` | `0` | Seconds before a telegram arrives |
 | `SearchMinChars` | `2` | Minimum characters for a directory search |
@@ -101,15 +115,20 @@ CREATE TABLE IF NOT EXISTS `rsg_telegrams` (
     `batch` VARCHAR(40) NULL DEFAULT NULL,         -- groups the copies of one office telegram
     `has_attachment` TINYINT(1) NOT NULL DEFAULT 0,
     `attachment` TEXT NULL DEFAULT NULL,           -- JSON {cash, items}, NULL once collected
-    PRIMARY KEY (`id`), INDEX `idx_citizenid` (`citizenid`), INDEX `idx_sender` (`sender_citizenid`)
+    `anonymous` TINYINT(1) NOT NULL DEFAULT 0,     -- sender hidden from the recipient
+    `silenced` TINYINT(1) NOT NULL DEFAULT 0,      -- hidden copy for a recipient who blocked the sender (Sent tab only)
+    `kind` VARCHAR(20) NULL DEFAULT NULL,          -- 'notice' | 'broadcast'
+    PRIMARY KEY (`id`), INDEX `idx_citizenid` (`citizenid`), INDEX `idx_sender` (`sender_citizenid`), INDEX `idx_inbox` (`citizenid`, `sent_at`)
 );
 -- rsg_telegram_contacts: id, citizenid, contact_citizenid, contact_name, nickname, added_at  (UNIQUE citizenid + contact_citizenid)
--- rsg_telegram_blocks:   id, citizenid, blocked_citizenid, blocked_name, added_at           (UNIQUE citizenid + blocked_citizenid)
+-- rsg_telegram_blocks:   id, citizenid, blocked_citizenid, blocked_name, added_at, anonymous (UNIQUE citizenid + blocked_citizenid)
+-- rsg_telegram_settings: citizenid (PK), unlisted   (hidden from the directory search)
+-- rsg_telegram_mailboxes: id, label, x, y, z, heading, created_by, created_at
 ```
 - `rsg_telegrams` – one row per telegram (`citizenid` = recipient). Delayed telegrams are stored straight away with a future `sent_at`; they stay hidden from the inbox until that time, so a paid telegram survives a server restart.
 - `rsg_telegram_contacts` – address book, unique on (`citizenid`, `contact_citizenid`).
 - `rsg_telegram_blocks` – block list, unique on (`citizenid`, `blocked_citizenid`).
-- New `rsg_telegrams` columns: `batch` (groups the copies of one office telegram for the Sent folder), `has_attachment`, `attachment` (JSON `{cash, items}`, `NULL` once collected) and an `idx_sender` index. Existing tables are migrated automatically.
+- New `rsg_telegrams` columns: `batch` (groups the copies of one office telegram for the Sent folder), `has_attachment`, `attachment` (JSON `{cash, items}`, `NULL` once collected) and `idx_sender` and `idx_inbox` indexes. Existing tables are migrated automatically.
 
 ## Data formats
 Inbox row (UI and `GetTelegrams`):
@@ -152,15 +171,19 @@ Contact: `{ citizenid, name, nickname }`. Blocked entry: `{ citizenid, name }`.
 All validate the player and require the player to be at a post office.
 | Name | Args | Returns |
 |---|---|---|
-| `rsg-telegram:server:getInbox` | – | inbox rows, or `false` if throttled (400 ms) |
+| `rsg-telegram:server:getInbox` | `{ offset?, query? }` | one page of inbox rows (`Config.InboxPageSize`), or `false` if throttled (400 ms) / refused. Anonymous senders come back with `sender_citizenid = 'ANON'` |
 | `rsg-telegram:server:searchRecipients` | `query` | results, or `false` if throttled (500 ms) |
-| `rsg-telegram:server:send` | `{citizenid \| job, subject, message, attachment?}` | `boolean` (job must exist in `Config.JobAddresses`; no attachments to offices) |
+| `rsg-telegram:server:send` | `{citizenid \| job, subject, message, attachment?, anonymous?}` | `boolean` (job must exist in `Config.JobAddresses`; no attachments to offices) |
 | `rsg-telegram:server:getSent` | – | one row per send with `recipients`, `delivered`, `read_count`, `unclaimed` |
 | `rsg-telegram:server:collect` | `id` | `{ ok, attachment? }` (attachment = leftover that did not fit) or `false` |
 | `rsg-telegram:server:getAttachables` | – | `{ cash, items = {{name,label,amount}} }` |
 | `rsg-telegram:server:markAllRead` / `deleteRead` | – | `boolean` (destroying skips telegrams with an uncollected attachment) |
-| `rsg-telegram:server:getBlocked` | – | `{ {citizenid, name} }` |
-| `rsg-telegram:server:block` / `unblock` | `citizenid` | `boolean` |
+| `rsg-telegram:server:getBlocked` | – | `{ {id, citizenid, name, anonymous} }` (`citizenid` is `nil` for anonymous blocks) |
+| `rsg-telegram:server:block` | `citizenid` or `{ id = telegramId }` | `boolean` (the id form blocks the real sender of an anonymous telegram without revealing them) |
+| `rsg-telegram:server:unblock` | `citizenid` or `{ id = blockId }` | `boolean` |
+| `rsg-telegram:server:getSettings` / `toggleListed` | – | `{ unlisted }` (directory listing) |
+| `rsg-telegram:server:getMailboxes` | – | `{ list, admin }` |
+| `rsg-telegram:server:addMailbox` / `removeMailbox` | `{x,y,z,heading}` / `id` | `boolean` (admin only, validated with rsg-gizmo / distance) |
 | `rsg-telegram:server:getContacts` | – | contacts, or `false` if throttled (400 ms) |
 | `rsg-telegram:server:addContact` | `{citizenid, nickname?}` | `boolean` (throttled 750 ms) |
 | `rsg-telegram:server:removeContact` | `citizenid` | `boolean` (throttled) |
@@ -169,6 +192,7 @@ All validate the player and require the player to be at a post office.
 Net event `rsg-telegram:server:markRead(id)` only marks the caller's own telegrams, requires a post office and is throttled (150 ms).
 The UI treats a `false` from the throttled read callbacks as "keep what is shown".
 Client event `rsg-telegram:client:newTelegram(senderName)` shows the arrival notification.
+Client event `rsg-telegram:client:unread(count)` updates the unread badge (sent on login, delivery and every read / delete).
 Client event `rsg-telegram:client:open(label, coords?, radius?)` opens the UI; it is only accepted from the server (used by `OpenTelegrams`).
 Net event `rsg-telegram:server:closed` is sent by the client when the UI closes and revokes a remote-access grant.
 
@@ -215,8 +239,18 @@ Telegrams sent by a script have `sender_citizenid = 'SYSTEM'` (unless `opts.send
 |---|---|---|
 | `IsOpen()` | `boolean` | Whether the telegram UI is open |
 | `Close()` | – | Closes the UI if open |
+| `GetUnreadCount()` | `number` | Unread telegrams (for HUD scripts) |
 
 The UI can be opened at a post office, or anywhere after a script calls `OpenTelegrams` (a time-limited grant that ends when the UI closes); the server enforces that for every UI callback.
+
+### Commands
+| Command | Permission | Description |
+|---|---|---|
+| `/telegrambroadcast <online\|all> <minutes> <subject \| message>` | `admin` / console | Telegram from the telegraph office to everyone online, or to every character (`Broadcast.MaxAll`). `minutes` > 0 schedules it: it is stored with a future delivery time and survives restarts |
+| `/notice <subject \| message>` | jobs in `Config.Notices.Jobs` (on duty) | Official notice to everyone online, shown with a Notice tag; cooldown `Notices.Cooldown` |
+| `/addmailbox` | `Config.Mailbox.Permission` | Place a mailbox with rsg-gizmo. Target a mailbox as an admin to remove it |
+
+Mailboxes open the same UI as a post office (read, write, address book); other scripts such as a house script can still use `OpenTelegrams`.
 
 ### Server events
 Local server events (listen with `AddEventHandler`, they are not net events). Payload: `{ id, recipient, recipientName, sender, senderName, subject, delay }`.
@@ -285,7 +319,7 @@ if exports['rsg-telegram']:IsOpen() then exports['rsg-telegram']:Close() end
 ## Security notes
 - Fee is taken server-side only after all checks; refunded if the insert fails.
 - Cooldown is claimed before any DB yield so parallel sends can't bypass it.
-- Text is trimmed, length-checked and stripped of control characters and `<>`; the UI also escapes all output.
+- Text is trimmed, length-checked and stripped of control characters (incl. C1, U+2028/2029, U+FEFF) and `<>`; the UI also escapes all output.
 - Citizen IDs are pattern-validated; all queries are parameterised.
 - Every UI action (read, delete, contacts, search, send) requires the player to be at a post office; the UI closes itself when the player moves away.
 - Inbox, address book and mark-read requests are rate limited, so a modified client cannot hammer the database.
@@ -293,9 +327,12 @@ if exports['rsg-telegram']:IsOpen() then exports['rsg-telegram']:Close() end
 - Text also has zero-width and bidirectional-override characters removed (stops spoofed sender/subject text).
 - The directory search can expose citizen IDs of every character; use `DirectorySearch = false` or `SearchByCitizenId = false` if that matters on your server.
 - Attachments are escrowed: cash and items are removed from the sender on send (rolled back if anything fails) and stored on the telegram. The recipient claims them with an atomic `UPDATE ... SET attachment = NULL`, so they cannot be duplicated by double-clicking or racing two requests. If the inventory cannot hold everything, the rest stays on the telegram. Telegrams with an uncollected attachment are never purged, trimmed or destroyed.
-- Attachments need `rsg-inventory`; money items, weapons and unique items are not attachable.
+- Attachments need `rsg-inventory`; money items, weapons, unique items and partly decayed stacks (quality < 100) are not attachable.
 - Job offices are resolved from `Config.JobAddresses` only; the client can never choose an arbitrary job.
-- Blocked senders see a normal "sent" result; nothing is stored, charged or taken, so blocking cannot be probed.
+- Blocked senders see a normal "sent" result: they are charged and the telegram appears in their Sent tab and is "delivered", but the copy is stored hidden (`silenced`) and never reaches the recipient. The only tell left is that an attachment is not taken from their inventory.
+- Anonymous telegrams: the client never receives the sender's citizen id (`ANON`); blocking goes through the telegram id. The real sender stays in `sender_citizenid` so staff can trace abuse.
+- Characters can hide from the directory search (`rsg_telegram_settings`), even against an exact citizen-id search; `ShowCitizenIds = false` also hides IDs in the UI.
+- Mailboxes: placement is admin-only and validated with `IsPlacementValid`; the server only lets players use the UI within range of an office or mailbox.
 - Remote access (`OpenTelegrams`) is a server-side, expiring grant per player, revoked when the UI closes or the player leaves.
 - API exports are server-only (never reachable from clients); other scripts must validate any client-supplied data before passing it in. `Config.API.Enabled = false` disables them all.
 
@@ -304,7 +341,10 @@ if exports['rsg-telegram']:IsOpen() then exports['rsg-telegram']:Close() end
 |---|---|
 | Tables are missing | `Config.AutoDatabase` must be `true`, or import `installation/rsg-telegram.sql`. Check the console for a red database error |
 | "Config.JobAddresses is set but the players table has no job column" | Your `players` table has no `job` JSON column, so offices are disabled. Use the correct column or leave `JobAddresses` empty |
-| Office telegram says nobody could be reached | No online or offline character holds that job, or everyone blocked the sender |
+| Office telegram says nobody could be reached | No online or offline character holds that job (active job or a secondary multi-job in `player_jobs`), or everyone blocked the sender |
+| No unread badge | `Config.UnreadBadge.Enabled`, and the server pushes the count on login / delivery; restart the resource after changing the config |
+| Mailbox does not appear | `Config.Mailbox.Enabled`, the model name, and that `rsg-target` / `rsg-gizmo` are started before this resource |
+| Economy fee not applied | `Config.Economy.Enabled`, `rsg-economy` started, and the post office has a `region` that exists in rsg-economy (mailboxes have none) |
 | Cannot attach an item | It is unique, a weapon, in `BlockedItems`, not in `AllowedItems` (when used) or missing from `RSGCore.Shared.Items` |
 | Attachment cannot be collected | Not enough inventory space; the rest stays on the telegram. Free space and collect again |
 | Telegram cannot be destroyed | It still holds an uncollected attachment |
@@ -314,6 +354,18 @@ if exports['rsg-telegram']:IsOpen() then exports['rsg-telegram']:Close() end
 | API exports return `false` | `Config.API.Enabled` is `false`, or an argument failed validation (see the failure reasons above) |
 
 ## Changelog
+### 3.3.0
+- Unread badge, inbox search and "Load more" paging, anonymous telegrams, delivery time by distance, `/notice`, `/telegrambroadcast` (scheduled / all characters), admin-placed mailboxes, optional `rsg-economy` fees and `rsg-reputation` standing
+- Blocked senders now get a hidden copy (charged, shown as delivered) instead of nothing, so blocking cannot be probed
+- Directory opt-out (Address Book), `ShowCitizenIds`, job offices now reach offline holders of the job as a secondary multi-job, unread telegrams are kept first when the inbox cap trims, telegrams of deleted characters are purged
+- New columns `anonymous`, `silenced`, `kind` (and `rsg_telegram_blocks.anonymous`), new tables `rsg_telegram_settings`, `rsg_telegram_mailboxes` (auto-migrated); new dependencies `rsg-target`, `rsg-gizmo`
+- 27 new locale keys in all 11 languages
+
+### 3.2.1
+- Attachments refuse partly decayed stacks (quality < 100); inbox callback answers `false` when access is refused so the UI does not open empty
+- Drafts are stored per character; text cleaning removes more invisible characters; search cuts on a character boundary
+- New `idx_inbox` index (auto-added), cooldown pruning, removed dead resize CSS and the `ui_resize` locale key
+
 ### 3.2.0
 - Sent folder with delivery / read status and optional read-receipt notifications
 - Mark all read and Destroy read
@@ -365,15 +417,15 @@ https://buymeacoffee.com/rexshack
 
 ## Technical reference
 
-Generated from the source of **rsg-telegram 3.2.0**. Names, arguments and defaults below are read straight from the code.
+Generated from the source of **rsg-telegram 3.3.0** (the sections above describe 3.3.0 additions in more detail). Names, arguments and defaults below are read straight from the code.
 
 ### Dependencies
 
-`rsg-core`, `rsg-inventory`, `oxmysql`
+`rsg-core`, `rsg-inventory`, `rsg-target`, `rsg-gizmo`, `oxmysql` (optional: `rsg-economy`, `rsg-reputation`)
 
 ### Database
 
-Tables: `rsg_telegrams`, `rsg_telegram_contacts`, `rsg_telegram_blocks`.
+Tables: `rsg_telegrams`, `rsg_telegram_contacts`, `rsg_telegram_blocks`, `rsg_telegram_settings`, `rsg_telegram_mailboxes`.
 
 Tables are created automatically on start while `Config.AutoDatabase = true` (default). Nothing is ever dropped or overwritten.
 For a manual install set `Config.AutoDatabase = false` and import `installation/rsg-telegram.sql` once.
@@ -466,7 +518,7 @@ local result = exports['rsg-telegram']:SendTelegram(recipient, subject, message,
 
 | Callback | Side | Arguments | File |
 |---|---|---|---|
-| `rsg-telegram:server:getInbox` | server | `source, cb` | `server/server.lua` |
+| `rsg-telegram:server:getInbox` | server | `source, cb, data` | `server/server.lua` |
 | `rsg-telegram:server:getSent` | server | `source, cb` | `server/server.lua` |
 | `rsg-telegram:server:searchRecipients` | server | `source, cb, query` | `server/server.lua` |
 | `rsg-telegram:server:getAttachables` | server | `source, cb` | `server/server.lua` |
@@ -476,8 +528,13 @@ local result = exports['rsg-telegram']:SendTelegram(recipient, subject, message,
 | `rsg-telegram:server:addContact` | server | `source, cb, data` | `server/server.lua` |
 | `rsg-telegram:server:removeContact` | server | `source, cb, citizenid` | `server/server.lua` |
 | `rsg-telegram:server:getBlocked` | server | `source, cb` | `server/server.lua` |
-| `rsg-telegram:server:block` | server | `source, cb, citizenid` | `server/server.lua` |
-| `rsg-telegram:server:unblock` | server | `source, cb, citizenid` | `server/server.lua` |
+| `rsg-telegram:server:block` | server | `source, cb, arg` | `server/server.lua` |
+| `rsg-telegram:server:unblock` | server | `source, cb, arg` | `server/server.lua` |
+| `rsg-telegram:server:getSettings` | server | `source, cb` | `server/server.lua` |
+| `rsg-telegram:server:toggleListed` | server | `source, cb` | `server/server.lua` |
+| `rsg-telegram:server:getMailboxes` | server | `source, cb` | `server/mailbox.lua` |
+| `rsg-telegram:server:addMailbox` | server | `source, cb, data` | `server/mailbox.lua` |
+| `rsg-telegram:server:removeMailbox` | server | `source, cb, id` | `server/mailbox.lua` |
 | `rsg-telegram:server:delete` | server | `source, cb, id` | `server/server.lua` |
 | `rsg-telegram:server:markAllRead` | server | `source, cb` | `server/server.lua` |
 | `rsg-telegram:server:deleteRead` | server | `source, cb` | `server/server.lua` |
@@ -497,6 +554,11 @@ Server events can be fired by any client, so every handler re-validates the play
 |---|---|---|---|
 | `rsg-telegram:client:open` | client | `label, coords, radius` | `client/client.lua` |
 | `rsg-telegram:client:newTelegram` | client | `senderName` | `client/client.lua` |
+| `rsg-telegram:client:unread` | client | `count` | `client/client.lua` |
+| `rsg-telegram:client:openAt` | client (local) | `label, coords, radius` | `client/client.lua` |
+| `rsg-telegram:client:placeMailbox` | client | `` | `client/mailbox.lua` |
+| `rsg-telegram:client:mailboxAdded` | client | `mailbox` | `client/mailbox.lua` |
+| `rsg-telegram:client:mailboxRemoved` | client | `id` | `client/mailbox.lua` |
 | `rsg-telegram:server:markRead` | server | `id` | `server/server.lua` |
 | `rsg-telegram:server:closed` | server | `` | `server/server.lua` |
 

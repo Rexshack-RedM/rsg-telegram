@@ -6,11 +6,18 @@ Telegram system for RSG Framework (RedM). Send and receive telegrams at any post
 - Post offices with blips and a `[J]` prompt (configurable)
 - Inbox with unread markers, read, reply, save sender and destroy, plus **Mark all read** and **Destroy read**
 - **Sent folder** with delivery status: In transit, Delivered, Read / Read by X of Y (read receipts, optional toasts)
-- **Block list**: block a sender from the telegram; their telegrams are dropped silently and nothing is charged
+- **Block list**: block a sender from the telegram; their telegrams never reach you and they cannot tell (it still looks sent and delivered to them)
 - **Attachments**: attach cash and items (taken from the sender on send, collected by the recipient from the telegram)
 - **Job offices**: address a telegram to a whole job (e.g. the sheriff's office) via `Config.JobAddresses`
 - **Remote mailbox**: other scripts can open the telegram UI anywhere (house, camp, mailbox) with `OpenTelegrams`
-- **Draft autosave**: an unsent telegram is restored the next time you write
+- **Draft autosave**: an unsent telegram is restored the next time you write (kept per character)
+- **Unread badge**: an on-screen envelope with your unread count (corner configurable, `GetUnreadCount` export for HUDs)
+- **Inbox search and paging**: search subject, sender and text; "Load more" for older telegrams
+- **Anonymous telegrams** (small extra fee): the recipient sees "Anonymous", can block but not reply
+- **Notices and bulletins**: `/notice` (law jobs) to everyone online, `/telegrambroadcast` (admin) to everyone online or every character, optionally scheduled
+- **Mailboxes**: `/addmailbox` places a mailbox prop (rsg-gizmo) that opens the telegram UI (rsg-target)
+- Optional delivery time by distance, `rsg-economy` fees (tax into the town treasury) and `rsg-reputation` standing
+- **Directory privacy**: each character can hide from the player directory; citizen IDs can be hidden in the UI
 - Address book with nicknames (max contacts configurable)
 - Recipient search by character name or citizen ID
 - Optional send fee, per-player send cooldown and delivery delay
@@ -27,7 +34,9 @@ Telegram system for RSG Framework (RedM). Send and receive telegrams at any post
 ## Dependencies
 - rsg-core
 - rsg-inventory (attachments)
+- rsg-target and rsg-gizmo (mailboxes)
 - oxmysql
+- Optional: rsg-economy, rsg-reputation (`Config.Economy`, `Config.Reputation`)
 
 ## Installation
 1. Drop `rsg-telegram` into your resources folder.
@@ -57,7 +66,14 @@ exports['rsg-telegram']:SendTelegram(citizenid, 'Delivery', 'Your order has arri
     attachment = { cash = 25, items = { { name = 'bread', amount = 2 } } },
 })
 ```
-Job offices, attachments and receipts are configured in `shared/config.lua` (`Config.JobAddresses`, `Config.Attachments`, `Config.Receipts`).
+Job offices, attachments, receipts, notices, mailboxes, anonymous telegrams, the badge and the economy / reputation hooks are configured in `shared/config.lua` (`Config.JobAddresses`, `Config.Attachments`, `Config.Receipts`, `Config.Notices`, `Config.Mailbox`, `Config.Anonymous`, `Config.UnreadBadge`, `Config.Economy`, `Config.Reputation`).
+
+### Commands
+| Command | Who | What |
+|---|---|---|
+| `/notice <subject \| message>` | jobs in `Config.Notices.Jobs`, on duty | Official notice to everyone online |
+| `/telegrambroadcast <online\|all> <minutes> <subject \| message>` | admin / console | Telegram to everyone online or every character, `minutes` > 0 schedules it |
+| `/addmailbox` | admin | Place a mailbox (target it as an admin to remove it) |
 
 See [DOCS.md](DOCS.md) for configuration and technical details.
 
